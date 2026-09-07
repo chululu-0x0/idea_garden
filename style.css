@@ -20,9 +20,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background:
-    radial-gradient(circle at 10% 4%, rgba(255,255,255,.8), transparent 22rem),
-    linear-gradient(180deg, #ece5d1 0%, #dfe6d7 48%, #d7dfd1 100%);
+  background: #dfe6d7;
   color: var(--ink);
   font-family: "Yu Mincho", "Hiragino Mincho ProN", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
 }
@@ -30,6 +28,31 @@ body {
 body {
   min-height: 100vh;
   overflow-x: hidden;
+  position: relative;
+  background: transparent;
+  isolation: isolate;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  background:
+    url("assets/img/6415A6C7-39F8-4DE7-8837-86C990DA8202.png")
+    center center / cover no-repeat;
+  pointer-events: none;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: rgba(244, 239, 224, .16);
+  pointer-events: none;
 }
 
 button,
@@ -54,30 +77,6 @@ summary {
   position: relative;
 }
 
-.app-shell::before,
-.app-shell::after {
-  content: "";
-  position: fixed;
-  z-index: 0;
-  width: 190px;
-  height: 190px;
-  border-radius: 50%;
-  filter: blur(1px);
-  opacity: .35;
-  pointer-events: none;
-}
-
-.app-shell::before {
-  top: 8vh;
-  right: -70px;
-  background: radial-gradient(circle, rgba(255,255,255,.85) 0 34%, rgba(255,255,255,0) 68%);
-}
-
-.app-shell::after {
-  left: -90px;
-  bottom: 16vh;
-  background: radial-gradient(circle, rgba(181,194,168,.9) 0 30%, rgba(181,194,168,0) 70%);
-}
 
 .version-badge {
   position: fixed;
@@ -102,7 +101,7 @@ summary {
   padding:
     calc(env(safe-area-inset-top) + 52px)
     16px
-    calc(110px + env(safe-area-inset-bottom));
+    calc(96px + env(safe-area-inset-bottom));
 }
 
 .view {
@@ -163,7 +162,6 @@ h3 {
   background:
     linear-gradient(rgba(250,246,233,.92), rgba(250,246,233,.92)),
     repeating-linear-gradient(0deg, transparent 0 22px, rgba(91,80,62,.08) 23px);
-  box-shadow: var(--shadow);
 }
 
 .today-card::after {
@@ -262,7 +260,6 @@ select:focus,
 input:focus,
 textarea:focus {
   border-color: rgba(95,112,80,.62);
-  box-shadow: 0 0 0 3px rgba(121,138,104,.12);
 }
 
 .idea-grid {
@@ -278,9 +275,8 @@ textarea:focus {
   border: 1px solid rgba(73,62,49,.13);
   border-radius: 15px 15px 24px 9px;
   background: rgba(250,247,236,.88);
-  box-shadow: 0 8px 24px rgba(70,56,39,.09);
   cursor: pointer;
-  transition: transform .16s ease, box-shadow .16s ease;
+  transition: transform .16s ease;
 }
 
 .idea-card:active {
@@ -372,7 +368,6 @@ textarea:focus {
   border: 1px solid var(--sage-dark);
   background: var(--sage);
   color: white;
-  box-shadow: 0 6px 16px rgba(95,112,80,.18);
 }
 
 .ghost-button {
@@ -429,7 +424,6 @@ textarea:focus {
   border-radius: 20px 20px 8px 8px;
   background: rgba(220,221,214,.65);
   color: #555451;
-  box-shadow: 0 10px 26px rgba(53,56,61,.08);
   cursor: pointer;
 }
 
@@ -461,20 +455,19 @@ textarea:focus {
 
 .bottom-nav {
   position: fixed;
-  right: max(12px, calc((100vw - 920px) / 2 + 12px));
-  bottom: calc(10px + env(safe-area-inset-bottom));
-  left: max(12px, calc((100vw - 920px) / 2 + 12px));
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 20;
   display: grid;
   grid-template-columns: 1fr 1fr 62px 1fr 1fr;
   align-items: center;
-  min-height: 68px;
-  padding: 6px 8px;
-  border: 1px solid rgba(73,62,49,.16);
-  border-radius: 24px;
-  background: rgba(248,244,232,.86);
-  box-shadow: 0 16px 44px rgba(64,56,47,.18);
-  backdrop-filter: blur(18px);
+  min-height: calc(68px + env(safe-area-inset-bottom));
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 0;
+  background: rgba(248,244,232,.88);
+  backdrop-filter: blur(14px);
 }
 
 .nav-item,
@@ -511,7 +504,6 @@ textarea:focus {
   color: white;
   font-size: 30px;
   line-height: 1;
-  box-shadow: 0 8px 22px rgba(95,112,80,.26);
 }
 
 .modal-backdrop {
@@ -533,7 +525,6 @@ textarea:focus {
   background:
     linear-gradient(rgba(248,244,231,.97), rgba(248,244,231,.97)),
     repeating-linear-gradient(0deg, transparent 0 26px, rgba(77,66,51,.07) 27px);
-  box-shadow: 0 24px 70px rgba(47,43,38,.28);
   animation: sheetUp .2s ease;
 }
 
@@ -667,7 +658,6 @@ label {
   border-radius: 50%;
   background: rgba(255,255,255,.6);
   font-size: 24px;
-  box-shadow: inset 0 0 0 1px rgba(95,112,80,.12);
 }
 
 .growth-box > p {
@@ -753,7 +743,6 @@ label {
   color: white;
   font-size: 12px;
   text-align: center;
-  box-shadow: 0 8px 28px rgba(64,56,47,.18);
 }
 
 @media (min-width: 700px) {

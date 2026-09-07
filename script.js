@@ -1,4 +1,4 @@
-const APP_VERSION = "0.1";
+const APP_VERSION = "0.2";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 1;
 
