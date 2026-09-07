@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#efe9d8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>idea_garden</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div class="version-badge">v0.1</div>
+
+    <main class="main" id="main">
+      <section class="view is-active" data-view="garden">
+        <section class="today-card" id="todayCard" aria-live="polite"></section>
+
+        <section class="garden-head">
+          <div>
+            <p class="eyebrow">your little idea garden</p>
+            <h1>庭</h1>
+          </div>
+          <button class="soft-button" id="openQuickAddTop" type="button">種を植える</button>
+        </section>
+
+        <section class="filter-row" aria-label="庭の絞り込み">
+          <select id="gardenStageFilter" aria-label="成長段階">
+            <option value="all">すべての成長</option>
+            <option value="seed">種</option>
+            <option value="sprout">芽</option>
+            <option value="bud">蕾</option>
+            <option value="flower">花</option>
+          </select>
+          <select id="gardenCategoryFilter" aria-label="カテゴリ">
+            <option value="all">すべてのカテゴリ</option>
+          </select>
+        </section>
+
+        <section class="idea-grid" id="gardenGrid"></section>
+        <div class="empty-state hidden" id="gardenEmpty">
+          <div class="empty-flower">✦</div>
+          <p>まだ何も植わっていません。</p>
+          <small>思いつきを一行だけ置いてみても大丈夫。</small>
+        </div>
+      </section>
+
+      <section class="view" data-view="specimens">
+        <section class="page-head">
+          <div>
+            <p class="eyebrow">pressed memories</p>
+            <h1>標本室</h1>
+          </div>
+        </section>
+        <section class="idea-grid" id="specimenGrid"></section>
+        <div class="empty-state hidden" id="specimenEmpty">
+          <div class="empty-flower">❀</div>
+          <p>まだ標本はありません。</p>
+          <small>作品に使った花を、ここへ残せます。</small>
+        </div>
+      </section>
+
+      <section class="view" data-view="cemetery">
+        <section class="page-head">
+          <div>
+            <p class="eyebrow">quiet place for old ideas</p>
+            <h1>墓地</h1>
+          </div>
+        </section>
+        <section class="cemetery-grid" id="cemeteryGrid"></section>
+        <div class="empty-state hidden" id="cemeteryEmpty">
+          <div class="empty-flower">☾</div>
+          <p>墓地は静かなままです。</p>
+          <small>使わなくなった種も、消さずに眠らせておけます。</small>
+        </div>
+      </section>
+
+      <section class="view" data-view="search">
+        <section class="page-head">
+          <div>
+            <p class="eyebrow">find a forgotten thought</p>
+            <h1>検索</h1>
+          </div>
+        </section>
+        <section class="search-panel">
+          <input id="searchInput" type="search" placeholder="言葉、作品名、メモから探す" autocomplete="off" />
+          <div class="search-filters">
+            <select id="searchCategoryFilter">
+              <option value="all">カテゴリ指定なし</option>
+            </select>
+            <select id="searchStageFilter">
+              <option value="all">成長指定なし</option>
+              <option value="seed">種</option>
+              <option value="sprout">芽</option>
+              <option value="bud">蕾</option>
+              <option value="flower">花</option>
+            </select>
+          </div>
+        </section>
+        <section class="idea-grid" id="searchGrid"></section>
+        <div class="empty-state hidden" id="searchEmpty">
+          <div class="empty-flower">⌕</div>
+          <p>該当する種が見つかりません。</p>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="メインメニュー">
+      <button class="nav-item is-active" data-target="garden" type="button">
+        <span class="nav-icon">⌂</span><span>庭</span>
+      </button>
+      <button class="nav-item" data-target="specimens" type="button">
+        <span class="nav-icon">❀</span><span>標本</span>
+      </button>
+      <button class="nav-add" id="openQuickAdd" type="button" aria-label="種を植える">＋</button>
+      <button class="nav-item" data-target="cemetery" type="button">
+        <span class="nav-icon">☾</span><span>墓地</span>
+      </button>
+      <button class="nav-item" data-target="search" type="button">
+        <span class="nav-icon">⌕</span><span>検索</span>
+      </button>
+    </nav>
+  </div>
+
+  <div class="modal-backdrop hidden" id="quickAddModal">
+    <section class="modal quick-add" role="dialog" aria-modal="true" aria-labelledby="quickAddTitle">
+      <button class="modal-close" data-close="quickAddModal" aria-label="閉じる">×</button>
+      <p class="eyebrow">plant a little thought</p>
+      <h2 id="quickAddTitle">何を思いついた？</h2>
+
+      <textarea id="quickBody" rows="4" placeholder="一行だけでも大丈夫。"></textarea>
+
+      <details class="optional-fields">
+        <summary>あとで決めてもいいこと</summary>
+        <div class="field-stack">
+          <label>タイトル
+            <input id="quickTitle" type="text" placeholder="空欄でも保存できます" />
+          </label>
+          <label>カテゴリ
+            <select id="quickCategory"></select>
+          </label>
+          <label>所属作品
+            <input id="quickProject" type="text" placeholder="未所属" />
+          </label>
+          <label>雰囲気
+            <select id="quickMood"></select>
+          </label>
+        </div>
+      </details>
+
+      <button class="primary-button" id="saveQuickIdea" type="button">種を植える</button>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="detailModal">
+    <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailHeading">
+      <header class="detail-top">
+        <div>
+          <p class="eyebrow" id="detailMeta">idea</p>
+          <h2 id="detailHeading">種</h2>
+        </div>
+        <button class="modal-close" data-close="detailModal" aria-label="閉じる">×</button>
+      </header>
+
+      <div class="detail-scroll">
+        <div class="detail-stage" id="detailStage"></div>
+
+        <label>タイトル
+          <input id="detailTitle" type="text" />
+        </label>
+
+        <label>アイデア
+          <textarea id="detailBody" rows="5"></textarea>
+        </label>
+
+        <div class="two-col">
+          <label>カテゴリ
+            <select id="detailCategory"></select>
+          </label>
+          <label>所属作品
+            <input id="detailProject" type="text" placeholder="未所属" />
+          </label>
+        </div>
+
+        <div class="two-col">
+          <label>雰囲気
+            <select id="detailMood"></select>
+          </label>
+          <label>状態
+            <select id="detailStatus">
+              <option value="active">庭</option>
+              <option value="specimen">標本室</option>
+              <option value="buried">墓地</option>
+            </select>
+          </label>
+        </div>
+
+        <label>肉付けメモ
+          <textarea id="detailMemo" rows="7" placeholder="思いついた断片を足していく場所。"></textarea>
+        </label>
+
+        <section class="growth-box">
+          <div class="growth-box-head">
+            <div>
+              <small>成長の問い</small>
+              <h3 id="growthQuestion">このアイデアの核は見えてきた？</h3>
+            </div>
+            <div class="stage-orb" id="stageOrb">🌰</div>
+          </div>
+          <p id="growthHint"></p>
+          <div class="growth-actions">
+            <button class="soft-button" id="stageDown" type="button">ひとつ戻す</button>
+            <button class="primary-button" id="stageUp" type="button">育てる</button>
+          </div>
+        </section>
+
+        <section class="relation-box">
+          <div class="section-title-row">
+            <div>
+              <small>connections</small>
+              <h3>関連する種</h3>
+            </div>
+          </div>
+          <div id="relationList" class="relation-list"></div>
+          <div class="relation-add-row">
+            <select id="relationTarget"></select>
+            <button class="soft-button" id="addRelation" type="button">繋げる</button>
+          </div>
+          <p class="relation-note">※ 全体相関図は後のバージョン用。今は繋がりだけ保存します。</p>
+        </section>
+
+        <section class="danger-zone">
+          <button class="ghost-button" id="duplicateIdea" type="button">この種から派生させる</button>
+          <button class="ghost-button" id="deleteIdea" type="button">完全に削除</button>
+        </section>
+      </div>
+
+      <footer class="detail-footer">
+        <button class="primary-button" id="saveDetail" type="button">変更を保存</button>
+      </footer>
+    </section>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
