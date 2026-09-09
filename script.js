@@ -1,7 +1,6 @@
-const APP_VERSION = "4";
+const APP_VERSION = "5";
 const DB_NAME = "idea_garden_db";
-const DB_VERSION = 1;
-/* Keep the v3 settings key so the user's existing theme/background choices survive the update. */
+const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
 const BACKGROUND_INTERVAL_MS = 5 * 60 * 1000;
 const BACKGROUND_FADE_MS = 5000;
@@ -16,7 +15,8 @@ const SKY_BACKGROUNDS = {
 
 const DEFAULT_SETTINGS = {
   themeMode: "system",
-  backgroundMode: "fairytale"
+  backgroundMode: "fairytale",
+  tagSort: "frequency"
 };
 
 const STAGES = [
@@ -39,30 +39,24 @@ const CATEGORIES = [
   "その他"
 ];
 
-const MOODS = [
-  "未設定",
-  "可愛い",
-  "不穏",
-  "暗い",
-  "幻想",
-  "日常",
-  "奇妙",
-  "静か",
-  "温かい",
-  "退廃"
+const FRAGMENT_KINDS = ["すべて", "未分類", "台詞", "言葉", "情景", "設定", "その他"];
+const EDIT_FRAGMENT_KINDS = FRAGMENT_KINDS.filter((kind) => kind !== "すべて");
+
+const DEFAULT_TAG_NAMES = [
+  "可愛い", "不穏", "幻想", "奇妙", "暗い", "静か", "温かい", "日常", "退廃"
 ];
 
 const GROWTH = {
   "キャラクター": {
-    seed: ["この人物の核は見えてきた？", "「この人物は何を望み、なぜそういう人物なのか？」に答えられそうなら、芽にしてよさそう。"],
-    sprout: ["この人物は作品の中で動き始めた？", "他の人物や世界とどう関わり、物語でどんな役割を持つのかが見えてきたら、蕾へ。"],
+    seed: ["この人物の核は見えてきた？", "「何を望み、なぜそういう人物なのか？」に答えられそうなら、芽にしてよさそう。"],
+    sprout: ["この人物は作品の中で動き始めた？", "他者との関係や物語上の役割が見えてきたら、蕾へ。"],
     bud: ["もう実際に登場させられる？", "行動や台詞を書けるところまで輪郭が定まっていれば、開花してよさそう。"],
-    flower: ["この花はもう使える状態。", "必要ならさらに肉付けしてもいいし、ここから別の種を派生させてもいい。"]
+    flower: ["この花はもう使える状態。", "必要ならさらに書き足してもいいし、ここから別の種を派生させてもいい。"]
   },
   "世界観・設定": {
     seed: ["この世界・設定の本質は見えてきた？", "「これはつまり何なのか？」を一言で説明できそうなら、芽にしてよさそう。"],
-    sprout: ["他の設定と繋がってきた？", "物語やキャラクターへどんな影響を与えるのかが見えてきたら、蕾へ。"],
-    bud: ["作品の中で矛盾なく使えそう？", "描写や説明にそのまま持ち込めるなら、開花。"],
+    sprout: ["他の設定と繋がってきた？", "人物や物語へどんな影響を与えるのかが見えてきたら、蕾へ。"],
+    bud: ["作品の中で矛盾なく使えそう？", "描写や説明へそのまま持ち込めるなら、開花。"],
     flower: ["この設定は作品へ持ち込める。", "さらに別設定の土台になったら、新しい種を落としてもいい。"]
   },
   "ストーリー・イベント": {
@@ -72,33 +66,33 @@ const GROWTH = {
     flower: ["この出来事はシーンとして使える。", "実際に書いたあとも、派生した出来事を新しい種として残せる。"]
   },
   "演出": {
-    seed: ["この演出で何を感じさせたい？", "驚き、不安、寂しさなど、狙いが言葉になれば芽へ。"],
-    sprout: ["どの場面で、どう見せるか決まってきた？", "条件・タイミング・見せ方がまとまってきたら蕾へ。"],
-    bud: ["そのまま執筆・実装できる？", "実際の制作に移せる程度まで決まっていれば開花。"],
+    seed: ["この演出で何を感じさせたい？", "狙っている感情や印象が言葉になれば、芽へ。"],
+    sprout: ["どの場面で、どう見せるか決まってきた？", "条件・タイミング・見せ方がまとまってきたら、蕾へ。"],
+    bud: ["そのまま執筆・実装できる？", "実際の制作に移せる程度まで決まっていれば、開花。"],
     flower: ["この演出は使える状態。", "別の場面へ応用したいなら、新しい派生種にしてもいい。"]
   },
   "ゲームシステム": {
-    seed: ["プレイヤーに何をさせる仕組み？", "遊びの中心行動が見えてきたら芽へ。"],
-    sprout: ["他のシステムや物語とどう関係する？", "報酬、進行、制約などとの繋がりが見えてきたら蕾へ。"],
-    bud: ["ルールとして実装できる？", "条件・入力・結果まで定義できていれば開花。"],
+    seed: ["プレイヤーに何をさせる仕組み？", "遊びの中心行動が見えてきたら、芽へ。"],
+    sprout: ["他のシステムや物語とどう関係する？", "報酬、進行、制約などとの繋がりが見えてきたら、蕾へ。"],
+    bud: ["ルールとして実装できる？", "条件・入力・結果まで定義できていれば、開花。"],
     flower: ["この仕組みは実装へ持ち込める。", "試した結果の改善案は、別の種として残してもいい。"]
   },
   "UI・画面": {
-    seed: ["この画面で何を見せ、何をさせたい？", "目的が言葉になれば芽へ。"],
-    sprout: ["情報の優先順位と操作の流れは見えた？", "どこを押し、何が変わるかが決まってきたら蕾へ。"],
-    bud: ["実際に画面として作れる？", "配置・操作・必要情報が揃っていれば開花。"],
+    seed: ["この画面で何を見せ、何をさせたい？", "目的が言葉になれば、芽へ。"],
+    sprout: ["情報の優先順位と操作の流れは見えた？", "どこを押し、何が変わるかが決まってきたら、蕾へ。"],
+    bud: ["実際に画面として作れる？", "配置・操作・必要情報が揃っていれば、開花。"],
     flower: ["このUIは制作へ持ち込める。", "実装後に生まれた改善点は、新しい種にしてもいい。"]
   },
   "台詞": {
-    seed: ["誰が、なぜこの言葉を言う？", "話者と感情の理由が見えてきたら芽へ。"],
-    sprout: ["どの場面で、誰に向けて言う？", "文脈と相手が定まってきたら蕾へ。"],
-    bud: ["実際のシーンへ組み込める？", "前後の流れに置けるなら開花。"],
+    seed: ["誰が、なぜこの言葉を言う？", "話者と感情の理由が見えてきたら、芽へ。"],
+    sprout: ["どの場面で、誰に向けて言う？", "文脈と相手が定まってきたら、蕾へ。"],
+    bud: ["実際のシーンへ組み込める？", "前後の流れに置けるなら、開花。"],
     flower: ["この台詞はシーンへ置ける状態。", "別の台詞や反応が生まれたら、そこから新しい種を作れる。"]
   },
   "ビジュアル": {
-    seed: ["この見た目で何を表現したい？", "雰囲気や意味が見えてきたら芽へ。"],
-    sprout: ["作品やキャラクターの意味と繋がった？", "色・形・モチーフの理由が定まってきたら蕾へ。"],
-    bud: ["デザインとして制作に移れる？", "必要な要素が揃っていれば開花。"],
+    seed: ["この見た目で何を表現したい？", "雰囲気や意味が見えてきたら、芽へ。"],
+    sprout: ["作品や人物の意味と繋がった？", "色・形・モチーフの理由が定まってきたら、蕾へ。"],
+    bud: ["デザインとして制作に移れる？", "必要な要素が揃っていれば、開花。"],
     flower: ["このビジュアルは制作へ持ち込める。", "差分や別案は派生種にしておける。"]
   },
   default: {
@@ -109,16 +103,142 @@ const GROWTH = {
   }
 };
 
-const GRAPH_NODE_W = 154;
-const GRAPH_NODE_H = 76;
-const GRAPH_MIN_SCALE = 0.28;
-const GRAPH_MAX_SCALE = 2.4;
+const CATEGORY_FIELDS = {
+  "キャラクター": {
+    description: "人物を動かすための骨格だけを分けて置いておく欄。全部埋める必要はありません。",
+    fields: [
+      { key: "name", label: "名前", type: "text" },
+      { key: "age", label: "年齢", type: "text" },
+      { key: "role", label: "物語上の役割", type: "textarea", wide: true },
+      { key: "personality", label: "性格・行動原理", type: "textarea", wide: true },
+      { key: "appearance", label: "外見・特徴", type: "textarea", wide: true },
+      { key: "past", label: "過去", type: "textarea", wide: true },
+      { key: "desire", label: "望み・目的", type: "textarea", wide: true },
+      { key: "relationships", label: "他者との関係", type: "textarea", wide: true },
+      { key: "secret", label: "秘密・本人が隠していること", type: "textarea", wide: true },
+      { key: "change", label: "物語を通した変化", type: "textarea", wide: true }
+    ]
+  },
+  "世界観・設定": {
+    description: "世界を成立させる前提、規則、社会と歴史を分けて考えられるようにした欄。",
+    fields: [
+      { key: "name", label: "世界・設定の呼び名", type: "text", wide: true },
+      { key: "core", label: "この世界の核", type: "textarea", wide: true },
+      { key: "rules", label: "法則・できること／できないこと", type: "textarea", wide: true },
+      { key: "geography", label: "土地・場所・環境", type: "textarea", wide: true },
+      { key: "society", label: "社会・文化・暮らし", type: "textarea", wide: true },
+      { key: "history", label: "歴史・過去の出来事", type: "textarea", wide: true },
+      { key: "magicTech", label: "魔法・技術・超常の仕組み", type: "textarea", wide: true },
+      { key: "conflict", label: "対立・問題・禁忌", type: "textarea", wide: true },
+      { key: "storyImpact", label: "物語や人物への影響", type: "textarea", wide: true }
+    ]
+  },
+  "ストーリー・イベント": {
+    description: "出来事そのものより、なぜ起きて何を変えるのかを整理する欄。",
+    fields: [
+      { key: "sceneName", label: "出来事・場面名", type: "text", wide: true },
+      { key: "purpose", label: "この場面の目的", type: "textarea", wide: true },
+      { key: "trigger", label: "起きるきっかけ", type: "textarea", wide: true },
+      { key: "participants", label: "関わる人物", type: "textarea", wide: true },
+      { key: "before", label: "直前の状態", type: "textarea", wide: true },
+      { key: "event", label: "何が起きるか", type: "textarea", wide: true },
+      { key: "outcome", label: "結果・失うもの／得るもの", type: "textarea", wide: true },
+      { key: "after", label: "その後どう変わるか", type: "textarea", wide: true }
+    ]
+  },
+  "演出": {
+    description: "見せ方の狙いと、いつ・どう発生させるかを分けて置いておく欄。",
+    fields: [
+      { key: "scene", label: "使う場面", type: "text", wide: true },
+      { key: "purpose", label: "感じさせたいこと", type: "textarea", wide: true },
+      { key: "trigger", label: "発生条件・タイミング", type: "textarea", wide: true },
+      { key: "visual", label: "画面・視覚表現", type: "textarea", wide: true },
+      { key: "sound", label: "音・声・無音の使い方", type: "textarea", wide: true },
+      { key: "duration", label: "長さ・テンポ", type: "text" },
+      { key: "implementation", label: "実装・執筆メモ", type: "textarea", wide: true }
+    ]
+  },
+  "ゲームシステム": {
+    description: "プレイヤーが何をして、どう結果が返る仕組みなのかを整理する欄。",
+    fields: [
+      { key: "name", label: "システム名", type: "text", wide: true },
+      { key: "playerAction", label: "プレイヤーがすること", type: "textarea", wide: true },
+      { key: "purpose", label: "この仕組みの目的", type: "textarea", wide: true },
+      { key: "rules", label: "基本ルール", type: "textarea", wide: true },
+      { key: "input", label: "入力・条件", type: "textarea", wide: true },
+      { key: "output", label: "結果・変化", type: "textarea", wide: true },
+      { key: "reward", label: "報酬・手応え", type: "textarea", wide: true },
+      { key: "limits", label: "制約・失敗条件", type: "textarea", wide: true },
+      { key: "connections", label: "他システムとの関係", type: "textarea", wide: true }
+    ]
+  },
+  "UI・画面": {
+    description: "画面の目的、情報の優先順位、操作の流れを分けて考える欄。",
+    fields: [
+      { key: "screenName", label: "画面名", type: "text", wide: true },
+      { key: "purpose", label: "この画面の目的", type: "textarea", wide: true },
+      { key: "information", label: "表示する情報", type: "textarea", wide: true },
+      { key: "priority", label: "最優先で見せるもの", type: "textarea", wide: true },
+      { key: "actions", label: "できる操作", type: "textarea", wide: true },
+      { key: "transition", label: "前後の画面遷移", type: "textarea", wide: true },
+      { key: "states", label: "通常・選択・エラー等の状態", type: "textarea", wide: true }
+    ]
+  },
+  "台詞": {
+    description: "一言から場面へ育てるために、誰が誰へ何のために言うかを整理する欄。",
+    fields: [
+      { key: "speaker", label: "話す人", type: "text" },
+      { key: "listener", label: "相手", type: "text" },
+      { key: "scene", label: "場面", type: "textarea", wide: true },
+      { key: "emotion", label: "感情", type: "textarea", wide: true },
+      { key: "intent", label: "本当の意図", type: "textarea", wide: true },
+      { key: "context", label: "前後の文脈", type: "textarea", wide: true }
+    ]
+  },
+  "ビジュアル": {
+    description: "見た目の断片を、モチーフ・色・意味へ分けて育てる欄。",
+    fields: [
+      { key: "subject", label: "対象", type: "text", wide: true },
+      { key: "motif", label: "モチーフ・象徴", type: "textarea", wide: true },
+      { key: "palette", label: "色・配色", type: "textarea", wide: true },
+      { key: "shape", label: "形・シルエット", type: "textarea", wide: true },
+      { key: "material", label: "素材・質感", type: "textarea", wide: true },
+      { key: "meaning", label: "デザイン上の意味", type: "textarea", wide: true },
+      { key: "reference", label: "参考・連想", type: "textarea", wide: true }
+    ]
+  },
+  "その他": {
+    description: "まだ分類しきれないけれど、少し整理しておきたいアイデア用。",
+    fields: [
+      { key: "core", label: "核になっていること", type: "textarea", wide: true },
+      { key: "use", label: "どう使えそうか", type: "textarea", wide: true },
+      { key: "questions", label: "まだ決めていないこと", type: "textarea", wide: true }
+    ]
+  },
+  "未分類": {
+    description: "カテゴリを決める前なので、ここでは項目を増やしません。フリースペースだけでも十分です。",
+    fields: []
+  }
+};
 
 let db;
 let ideas = [];
 let relations = [];
+let fragments = [];
+let tags = [];
+
 let currentIdeaId = null;
+let currentFragmentId = null;
+let transferFragmentId = null;
 let currentView = "garden";
+let fragmentKindFilter = "すべて";
+let fragmentSelectedKind = "未分類";
+
+let structuredDraft = {};
+let quickSelectedTags = new Set();
+let detailSelectedTags = new Set();
+let fragmentSelectedTags = new Set();
+const tagExpanded = { quick: false, detail: false, fragment: false };
 
 let uiSettings = loadSettings();
 let resolvedTheme = "light";
@@ -130,15 +250,6 @@ let rotationRemainingMs = BACKGROUND_INTERVAL_MS;
 let rotationStartedAt = null;
 let lastFairytaleIndex = -1;
 
-let graphMode = "focus";
-let graphFocusId = null;
-let graphLayout = { nodes: [], edges: [] };
-let graphTransform = { x: 0, y: 0, scale: 1 };
-let graphPointers = new Map();
-let graphPanState = null;
-let graphPinchState = null;
-let graphFitPending = false;
-
 const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -147,18 +258,17 @@ function uid(prefix = "id") {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-/* ---------- Theme / background ---------- */
-
+/* Theme / background */
 function loadSettings() {
   try {
     const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
     return {
       themeMode: ["system", "light", "dark"].includes(parsed?.themeMode)
-        ? parsed.themeMode
-        : DEFAULT_SETTINGS.themeMode,
+        ? parsed.themeMode : DEFAULT_SETTINGS.themeMode,
       backgroundMode: ["fairytale", "sky"].includes(parsed?.backgroundMode)
-        ? parsed.backgroundMode
-        : DEFAULT_SETTINGS.backgroundMode
+        ? parsed.backgroundMode : DEFAULT_SETTINGS.backgroundMode,
+      tagSort: ["frequency", "recent"].includes(parsed?.tagSort)
+        ? parsed.tagSort : DEFAULT_SETTINGS.tagSort
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -179,7 +289,6 @@ function applyTheme({ updateBackground = true } = {}) {
   const nextTheme = resolveTheme();
   const changed = nextTheme !== resolvedTheme;
   resolvedTheme = nextTheme;
-
   document.documentElement.dataset.theme = resolvedTheme;
   document.documentElement.dataset.themeMode = uiSettings.themeMode;
 
@@ -187,7 +296,6 @@ function applyTheme({ updateBackground = true } = {}) {
   if (themeColor) {
     themeColor.setAttribute("content", resolvedTheme === "dark" ? "#101625" : "#efe9d8");
   }
-
   renderSettingsControls();
 
   if (updateBackground && uiSettings.backgroundMode === "sky" && changed) {
@@ -201,9 +309,13 @@ function renderSettingsControls() {
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-checked", String(selected));
   });
-
   $$("[data-background-mode]").forEach((button) => {
     const selected = button.dataset.backgroundMode === uiSettings.backgroundMode;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", String(selected));
+  });
+  $$("[data-tag-sort]").forEach((button) => {
+    const selected = button.dataset.tagSort === uiSettings.tagSort;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-checked", String(selected));
   });
@@ -225,17 +337,13 @@ function selectThemeMode(mode) {
   uiSettings.themeMode = mode;
   saveSettings();
   applyTheme({ updateBackground: true });
-  renderSettingsControls();
   toast(mode === "system"
     ? "端末の表示設定と同期します。"
-    : `${mode === "dark" ? "ダーク" : "ライト"}モードに固定しました。`
-  );
+    : `${mode === "dark" ? "ダーク" : "ライト"}モードに固定しました。`);
 }
 
 function selectBackgroundMode(mode) {
-  if (!["fairytale", "sky"].includes(mode)) return;
-  if (uiSettings.backgroundMode === mode) return;
-
+  if (!["fairytale", "sky"].includes(mode) || uiSettings.backgroundMode === mode) return;
   uiSettings.backgroundMode = mode;
   saveSettings();
   rotationRemainingMs = BACKGROUND_INTERVAL_MS;
@@ -268,7 +376,6 @@ async function setBackgroundImage(path, { immediate = false } = {}) {
     console.warn("背景画像を読み込めませんでした:", path);
     return;
   }
-
   const layers = [$("#bgLayerA"), $("#bgLayerB")];
   if (!layers[0] || !layers[1]) return;
   clearTimeout(backgroundTransitionTimer);
@@ -291,7 +398,6 @@ async function setBackgroundImage(path, { immediate = false } = {}) {
   const nextIndex = 1 - activeBackgroundLayer;
   const oldLayer = layers[oldIndex];
   const nextLayer = layers[nextIndex];
-
   nextLayer.style.backgroundImage = `url("${path}")`;
   nextLayer.classList.remove("is-visible");
 
@@ -378,12 +484,10 @@ async function initializeBackground() {
   }
 }
 
-/* ---------- IndexedDB ---------- */
-
+/* IndexedDB */
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-
     req.onupgradeneeded = (event) => {
       const database = event.target.result;
       if (!database.objectStoreNames.contains("ideas")) {
@@ -393,12 +497,20 @@ function openDB() {
         store.createIndex("category", "category");
       }
       if (!database.objectStoreNames.contains("relations")) {
-        const relationStore = database.createObjectStore("relations", { keyPath: "id" });
-        relationStore.createIndex("sourceIdeaId", "sourceIdeaId");
-        relationStore.createIndex("targetIdeaId", "targetIdeaId");
+        const store = database.createObjectStore("relations", { keyPath: "id" });
+        store.createIndex("sourceIdeaId", "sourceIdeaId");
+        store.createIndex("targetIdeaId", "targetIdeaId");
+      }
+      if (!database.objectStoreNames.contains("fragments")) {
+        const store = database.createObjectStore("fragments", { keyPath: "id" });
+        store.createIndex("updatedAt", "updatedAt");
+        store.createIndex("kind", "kind");
+      }
+      if (!database.objectStoreNames.contains("tags")) {
+        const store = database.createObjectStore("tags", { keyPath: "id" });
+        store.createIndex("name", "name", { unique: false });
       }
     };
-
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
@@ -431,56 +543,84 @@ function remove(storeName, key) {
   });
 }
 
+async function seedDefaultTags() {
+  const existing = await getAll("tags");
+  if (existing.length) return;
+  const now = new Date().toISOString();
+  for (let index = 0; index < DEFAULT_TAG_NAMES.length; index += 1) {
+    await put("tags", {
+      id: `tag_default_${index + 1}`,
+      name: DEFAULT_TAG_NAMES[index],
+      createdAt: now
+    });
+  }
+}
+
 async function reloadData() {
   ideas = await getAll("ideas");
   relations = await getAll("relations");
-  sortIdeas();
-  ensureGraphFocus();
-}
+  fragments = await getAll("fragments");
+  tags = await getAll("tags");
 
-function sortIdeas() {
+  ideas.forEach((idea) => {
+    if (!Array.isArray(idea.tags)) idea.tags = [];
+    if (!idea.details || typeof idea.details !== "object") idea.details = {};
+  });
+  fragments.forEach((fragment) => {
+    if (!Array.isArray(fragment.tags)) fragment.tags = [];
+    if (!EDIT_FRAGMENT_KINDS.includes(fragment.kind)) fragment.kind = "未分類";
+  });
+
   ideas.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  fragments.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  computeTagStats();
 }
 
-/* ---------- Common render helpers ---------- */
+async function migrateLegacyMoods() {
+  const nameMap = new Map(tags.map((tag) => [tag.name.trim().toLowerCase(), tag]));
+  let changed = false;
 
-function fillOptions(select, values, selected = null) {
-  select.innerHTML = "";
-  values.forEach((value) => {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    if (value === selected) option.selected = true;
-    select.appendChild(option);
-  });
+  for (const idea of ideas) {
+    if (!Object.prototype.hasOwnProperty.call(idea, "mood")) continue;
+    const mood = String(idea.mood || "").trim();
+
+    if (mood && mood !== "未設定") {
+      let tag = nameMap.get(mood.toLowerCase());
+      if (!tag) {
+        tag = { id: uid("tag"), name: mood, createdAt: new Date().toISOString() };
+        await put("tags", tag);
+        tags.push(tag);
+        nameMap.set(mood.toLowerCase(), tag);
+      }
+      if (!idea.tags.includes(tag.id)) {
+        idea.tags.push(tag.id);
+      }
+    }
+
+    /* v5 no longer uses mood; removing it prevents a deleted legacy tag from reappearing later. */
+    delete idea.mood;
+    await put("ideas", idea);
+    changed = true;
+  }
+
+  if (changed) {
+    await reloadData();
+  }
 }
 
-function setupSelects() {
-  fillOptions($("#quickCategory"), CATEGORIES);
-  fillOptions($("#detailCategory"), CATEGORIES);
-  fillOptions($("#quickMood"), MOODS);
-  fillOptions($("#detailMood"), MOODS);
-
-  [$("#gardenCategoryFilter"), $("#searchCategoryFilter")].forEach((select) => {
-    CATEGORIES.forEach((category) => {
-      const option = document.createElement("option");
-      option.value = category;
-      option.textContent = category;
-      select.appendChild(option);
-    });
-  });
-}
-
+/* Common data helpers */
 function stageInfo(id) {
   return STAGES.find((stage) => stage.id === id) || STAGES[0];
+}
+
+function displayTitle(idea) {
+  return idea.title?.trim() || idea.body?.trim().slice(0, 24) || "名もない種";
 }
 
 function formatDate(dateString) {
   if (!dateString) return "";
   return new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "short",
-    day: "numeric"
+    year: "numeric", month: "short", day: "numeric"
   }).format(new Date(dateString));
 }
 
@@ -493,8 +633,13 @@ function daysAgo(dateString) {
   return `${diff}日前`;
 }
 
-function displayTitle(idea) {
-  return idea.title?.trim() || idea.body?.trim().slice(0, 24) || "名もない種";
+function escapeHTML(value = "") {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function getRelationCount(ideaId) {
@@ -503,11 +648,367 @@ function getRelationCount(ideaId) {
   ).length;
 }
 
+function tagById(id) {
+  return tags.find((tag) => tag.id === id);
+}
+
+function tagNames(ids = []) {
+  return ids.map((id) => tagById(id)?.name).filter(Boolean);
+}
+
+function computeTagStats() {
+  const stats = new Map(tags.map((tag) => [tag.id, { count: 0, last: 0 }]));
+  const apply = (item) => {
+    const timestamp = new Date(item.updatedAt || item.createdAt || 0).getTime() || 0;
+    (item.tags || []).forEach((tagId) => {
+      if (!stats.has(tagId)) return;
+      const stat = stats.get(tagId);
+      stat.count += 1;
+      stat.last = Math.max(stat.last, timestamp);
+    });
+  };
+  ideas.forEach(apply);
+  fragments.forEach(apply);
+  tags.forEach((tag) => {
+    const stat = stats.get(tag.id) || { count: 0, last: 0 };
+    tag._usageCount = stat.count;
+    tag._lastUsedAt = stat.last;
+  });
+}
+
+function sortedTags() {
+  const list = [...tags];
+  if (uiSettings.tagSort === "recent") {
+    return list.sort((a, b) =>
+      (b._lastUsedAt || 0) - (a._lastUsedAt || 0) ||
+      (b._usageCount || 0) - (a._usageCount || 0) ||
+      a.name.localeCompare(b.name, "ja")
+    );
+  }
+  return list.sort((a, b) =>
+    (b._usageCount || 0) - (a._usageCount || 0) ||
+    (b._lastUsedAt || 0) - (a._lastUsedAt || 0) ||
+    a.name.localeCompare(b.name, "ja")
+  );
+}
+
+/* Tag UI */
+function selectedSetForContext(context) {
+  if (context === "quick") return quickSelectedTags;
+  if (context === "detail") return detailSelectedTags;
+  return fragmentSelectedTags;
+}
+
+function renderTagSelector(context) {
+  const container = $(`#${context}TagList`);
+  if (!container) return;
+  const expandButton = $(`[data-tag-expand="${context}"]`);
+  if (expandButton) {
+    expandButton.textContent = tagExpanded[context]
+      ? "上位だけ"
+      : (context === "detail" ? "タグを選ぶ" : "すべて");
+  }
+  const selected = selectedSetForContext(context);
+  const ordered = sortedTags();
+  const shown = tagExpanded[context]
+    ? ordered
+    : ordered.filter((tag, index) => index < 8 || selected.has(tag.id));
+
+  container.innerHTML = "";
+  if (!shown.length) {
+    const note = document.createElement("span");
+    note.className = "tag-empty-note";
+    note.textContent = "設定からタグを作れます。";
+    container.appendChild(note);
+    return;
+  }
+
+  shown.forEach((tag) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `tag-chip${selected.has(tag.id) ? " is-selected" : ""}`;
+    button.textContent = `# ${tag.name}`;
+    button.addEventListener("click", () => {
+      if (selected.has(tag.id)) selected.delete(tag.id);
+      else selected.add(tag.id);
+      renderTagSelector(context);
+    });
+    container.appendChild(button);
+  });
+}
+
+function renderAllTagSelectors() {
+  renderTagSelector("quick");
+  renderTagSelector("detail");
+  renderTagSelector("fragment");
+}
+
+function renderTagManageList() {
+  const list = $("#tagManageList");
+  if (!list) return;
+  list.innerHTML = "";
+  const ordered = sortedTags();
+
+  if (!ordered.length) {
+    list.innerHTML = `<div class="tag-empty-note">まだタグがありません。</div>`;
+    return;
+  }
+
+  ordered.forEach((tag) => {
+    const row = document.createElement("div");
+    row.className = "tag-manage-item";
+    row.innerHTML = `
+      <div>
+        <strong># ${escapeHTML(tag.name)}</strong>
+        <small>${tag._usageCount || 0}件で使用</small>
+      </div>
+      <button type="button" aria-label="${escapeHTML(tag.name)}を削除">×</button>
+    `;
+    row.querySelector("button").addEventListener("click", () => deleteTag(tag.id));
+    list.appendChild(row);
+  });
+}
+
+async function createTag() {
+  const input = $("#newTagInput");
+  const name = input.value.trim().replace(/^#+\s*/, "");
+  if (!name) return;
+  if (tags.some((tag) => tag.name.toLowerCase() === name.toLowerCase())) {
+    toast("同じ名前のタグがあります。");
+    return;
+  }
+  await put("tags", {
+    id: uid("tag"),
+    name: name.slice(0, 24),
+    createdAt: new Date().toISOString()
+  });
+  input.value = "";
+  await reloadData();
+  renderSettingsControls();
+  renderTagManageList();
+  renderAllTagSelectors();
+  toast("タグを追加しました。");
+}
+
+async function deleteTag(tagId) {
+  const tag = tagById(tagId);
+  if (!tag) return;
+  const ok = confirm(`タグ「${tag.name}」を削除しますか？\n庭や断片からもこのタグだけ外れます。`);
+  if (!ok) return;
+
+  for (const idea of ideas) {
+    if (!idea.tags.includes(tagId)) continue;
+    idea.tags = idea.tags.filter((id) => id !== tagId);
+    await put("ideas", idea);
+  }
+  for (const fragment of fragments) {
+    if (!fragment.tags.includes(tagId)) continue;
+    fragment.tags = fragment.tags.filter((id) => id !== tagId);
+    await put("fragments", fragment);
+  }
+
+  quickSelectedTags.delete(tagId);
+  detailSelectedTags.delete(tagId);
+  fragmentSelectedTags.delete(tagId);
+  await remove("tags", tagId);
+  await reloadData();
+  renderAll();
+  renderTagManageList();
+  renderAllTagSelectors();
+  toast("タグを削除しました。");
+}
+
+function selectTagSort(mode) {
+  if (!["frequency", "recent"].includes(mode)) return;
+  uiSettings.tagSort = mode;
+  saveSettings();
+  renderSettingsControls();
+  renderTagManageList();
+  renderAllTagSelectors();
+}
+
+/* Category picker */
+function setCategoryPicker(context, category, { triggerChange = false } = {}) {
+  if (!CATEGORIES.includes(category)) category = "未分類";
+
+  if (triggerChange && context === "detail") {
+    collectStructuredFields();
+  }
+
+  const hidden = $(`#${context}Category`);
+  const trigger = $(`#${context}CategoryTrigger`);
+  if (hidden) hidden.value = category;
+  if (trigger) trigger.textContent = category;
+
+  const menu = $(`#${context}CategoryMenu`);
+  if (menu) {
+    menu.querySelectorAll(".compact-picker-option").forEach((option) => {
+      option.classList.toggle("is-selected", option.dataset.category === category);
+    });
+  }
+
+  if (triggerChange && context === "detail") {
+    renderStructuredFields(category);
+    const idea = ideas.find((item) => item.id === currentIdeaId);
+    if (idea) renderGrowth({ ...idea, category });
+  }
+}
+
+function buildCategoryPickers() {
+  ["quick", "detail", "transfer"].forEach((context) => {
+    const menu = $(`#${context}CategoryMenu`);
+    const trigger = $(`#${context}CategoryTrigger`);
+    if (!menu || !trigger) return;
+
+    menu.innerHTML = "";
+    CATEGORIES.forEach((category) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "compact-picker-option";
+      button.dataset.category = category;
+      button.textContent = category;
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setCategoryPicker(context, category, { triggerChange: true });
+        menu.classList.add("hidden");
+        trigger.setAttribute("aria-expanded", "false");
+      });
+      menu.appendChild(button);
+    });
+
+    trigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeCategoryMenus(context);
+      const willOpen = menu.classList.contains("hidden");
+      menu.classList.toggle("hidden", !willOpen);
+      trigger.setAttribute("aria-expanded", String(willOpen));
+    });
+  });
+
+  buildFilterCategoryPicker("gardenFilter", {
+    hiddenId: "gardenCategoryFilter",
+    triggerId: "gardenFilterCategoryTrigger",
+    menuId: "gardenFilterCategoryMenu",
+    allLabel: "すべてのカテゴリ",
+    onChange: renderGarden
+  });
+
+  buildFilterCategoryPicker("searchFilter", {
+    hiddenId: "searchCategoryFilter",
+    triggerId: "searchFilterCategoryTrigger",
+    menuId: "searchFilterCategoryMenu",
+    allLabel: "カテゴリ指定なし",
+    onChange: renderSearch
+  });
+}
+
+function buildFilterCategoryPicker(context, config) {
+  const hidden = $(`#${config.hiddenId}`);
+  const trigger = $(`#${config.triggerId}`);
+  const menu = $(`#${config.menuId}`);
+  if (!hidden || !trigger || !menu) return;
+
+  const options = [{ value: "all", label: config.allLabel }, ...CATEGORIES.map((category) => ({
+    value: category,
+    label: category
+  }))];
+
+  menu.innerHTML = "";
+  options.forEach((optionData) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "compact-picker-option";
+    button.dataset.category = optionData.value;
+    button.textContent = optionData.label;
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      hidden.value = optionData.value;
+      trigger.textContent = optionData.label;
+      menu.querySelectorAll(".compact-picker-option").forEach((item) => {
+        item.classList.toggle("is-selected", item === button);
+      });
+      menu.classList.add("hidden");
+      trigger.setAttribute("aria-expanded", "false");
+      config.onChange();
+    });
+    menu.appendChild(button);
+  });
+
+  menu.querySelector('[data-category="all"]')?.classList.add("is-selected");
+  trigger.addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeCategoryMenus(context);
+    const willOpen = menu.classList.contains("hidden");
+    menu.classList.toggle("hidden", !willOpen);
+    trigger.setAttribute("aria-expanded", String(willOpen));
+  });
+}
+
+function closeCategoryMenus(exceptContext = null) {
+  const configs = [
+    ["quickCategoryMenu", "quickCategoryTrigger", "quick"],
+    ["detailCategoryMenu", "detailCategoryTrigger", "detail"],
+    ["transferCategoryMenu", "transferCategoryTrigger", "transfer"],
+    ["gardenFilterCategoryMenu", "gardenFilterCategoryTrigger", "gardenFilter"],
+    ["searchFilterCategoryMenu", "searchFilterCategoryTrigger", "searchFilter"]
+  ];
+  configs.forEach(([menuId, triggerId, context]) => {
+    if (context === exceptContext) return;
+    $(`#${menuId}`)?.classList.add("hidden");
+    $(`#${triggerId}`)?.setAttribute("aria-expanded", "false");
+  });
+}
+
+/* Structured fields */
+function collectStructuredFields() {
+  const category = $("#detailCategory")?.value || "未分類";
+  if (!structuredDraft[category] || typeof structuredDraft[category] !== "object") {
+    structuredDraft[category] = {};
+  }
+  $$("#structuredFields [data-structured-key]").forEach((field) => {
+    structuredDraft[category][field.dataset.structuredKey] = field.value;
+  });
+}
+
+function renderStructuredFields(category) {
+  const config = CATEGORY_FIELDS[category] || CATEGORY_FIELDS["未分類"];
+  const categoryDraft = structuredDraft[category] && typeof structuredDraft[category] === "object"
+    ? structuredDraft[category]
+    : {};
+  $("#structuredCategoryBadge").textContent = category;
+  $("#structuredDescription").textContent = config.description;
+  const fields = $("#structuredFields");
+  fields.innerHTML = "";
+
+  if (!config.fields.length) {
+    fields.innerHTML = `<div class="tag-empty-note">このカテゴリでは専用欄はありません。フリースペースをそのまま使えます。</div>`;
+    return;
+  }
+
+  config.fields.forEach((definition) => {
+    const wrapper = document.createElement("label");
+    wrapper.className = `structured-field${definition.wide ? " is-wide" : ""}`;
+    const caption = document.createElement("span");
+    caption.textContent = definition.label;
+    wrapper.appendChild(caption);
+
+    const field = document.createElement(definition.type === "textarea" ? "textarea" : "input");
+    if (definition.type !== "textarea") field.type = "text";
+    if (definition.type === "textarea") field.rows = 3;
+    field.dataset.structuredKey = definition.key;
+    field.value = categoryDraft[definition.key] || "";
+    wrapper.appendChild(field);
+    fields.appendChild(wrapper);
+  });
+}
+
+/* Main cards / lists */
 function createIdeaCard(idea) {
   const stage = stageInfo(idea.stage);
   const article = document.createElement("article");
   article.className = "idea-card";
   article.dataset.id = idea.id;
+  const previewTags = tagNames(idea.tags).slice(0, 2);
   article.innerHTML = `
     <div class="card-top">
       <span class="stage-mark">${stage.icon}</span>
@@ -517,11 +1018,9 @@ function createIdeaCard(idea) {
     <p>${escapeHTML(idea.body || "まだ本文はありません。")}</p>
     <div class="card-bottom">
       <span class="stage-text">${stage.label}</span>
-      <span class="relation-count">${
-        getRelationCount(idea.id)
-          ? `⌁ ${getRelationCount(idea.id)}`
-          : escapeHTML(idea.project || "未所属")
-      }</span>
+      <span class="card-tag-preview">
+        ${previewTags.map((name) => `<span class="card-tag">#${escapeHTML(name)}</span>`).join("")}
+      </span>
     </div>
   `;
   article.addEventListener("click", () => openDetail(idea.id));
@@ -531,15 +1030,38 @@ function createIdeaCard(idea) {
 function createGraveCard(idea) {
   const article = document.createElement("article");
   article.className = "grave-card";
-  article.dataset.id = idea.id;
   article.innerHTML = `
     <h3>${escapeHTML(displayTitle(idea))}</h3>
     <p>${escapeHTML(idea.body || "")}</p>
-    <span class="grave-date">${
-      idea.buriedAt ? `${formatDate(idea.buriedAt)} 埋葬` : "眠っている種"
-    }</span>
+    <span class="grave-date">${idea.buriedAt ? `${formatDate(idea.buriedAt)} 埋葬` : "眠っている種"}</span>
   `;
   article.addEventListener("click", () => openDetail(idea.id));
+  return article;
+}
+
+function createFragmentCard(fragment, { compact = false } = {}) {
+  const article = document.createElement("article");
+  article.className = "fragment-card";
+  const names = tagNames(fragment.tags);
+  article.innerHTML = `
+    <div class="fragment-card-main">
+      <span class="fragment-kind">${escapeHTML(fragment.kind || "未分類")}</span>
+      <p class="fragment-text">${escapeHTML(fragment.text || "")}</p>
+      <div class="fragment-meta">
+        <div class="fragment-tags">
+          ${names.slice(0, compact ? 2 : 4).map((name) => `<span class="card-tag">#${escapeHTML(name)}</span>`).join("")}
+        </div>
+        <span>${escapeHTML(formatDate(fragment.updatedAt || fragment.createdAt))}</span>
+      </div>
+    </div>
+    <div class="fragment-actions">
+      <button class="grow-fragment" type="button">庭へ</button>
+      <button class="edit-fragment" type="button">編集</button>
+    </div>
+  `;
+  article.querySelector(".fragment-card-main").addEventListener("click", () => openFragmentModal(fragment.id));
+  article.querySelector(".edit-fragment").addEventListener("click", () => openFragmentModal(fragment.id));
+  article.querySelector(".grow-fragment").addEventListener("click", () => openTransferModal(fragment.id));
   return article;
 }
 
@@ -547,16 +1069,15 @@ function renderGarden() {
   const grid = $("#gardenGrid");
   const empty = $("#gardenEmpty");
   grid.innerHTML = "";
-
   const stage = $("#gardenStageFilter").value;
   const category = $("#gardenCategoryFilter").value;
+
   const list = ideas.filter((idea) => {
     if (idea.status !== "active") return false;
     if (stage !== "all" && idea.stage !== stage) return false;
     if (category !== "all" && idea.category !== category) return false;
     return true;
   });
-
   list.forEach((idea) => grid.appendChild(createIdeaCard(idea)));
   empty.classList.toggle("hidden", list.length > 0);
 }
@@ -579,43 +1100,88 @@ function renderCemetery() {
   empty.classList.toggle("hidden", list.length > 0);
 }
 
+function renderFragmentKindFilter() {
+  const row = $("#fragmentKindFilter");
+  row.innerHTML = "";
+  FRAGMENT_KINDS.forEach((kind) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = kind === fragmentKindFilter ? "is-selected" : "";
+    button.textContent = kind;
+    button.addEventListener("click", () => {
+      fragmentKindFilter = kind;
+      renderFragmentKindFilter();
+      renderFragments();
+    });
+    row.appendChild(button);
+  });
+}
+
+function renderFragments() {
+  const list = $("#fragmentList");
+  const empty = $("#fragmentEmpty");
+  const query = $("#fragmentSearchInput").value.trim().toLowerCase();
+  list.innerHTML = "";
+
+  const filtered = fragments.filter((fragment) => {
+    if (fragmentKindFilter !== "すべて" && fragment.kind !== fragmentKindFilter) return false;
+    const haystack = `${fragment.text} ${fragment.kind} ${tagNames(fragment.tags).join(" ")}`.toLowerCase();
+    return !query || haystack.includes(query);
+  });
+
+  filtered.forEach((fragment) => list.appendChild(createFragmentCard(fragment)));
+  empty.classList.toggle("hidden", filtered.length > 0);
+}
+
+function flattenDetailValues(value) {
+  if (value == null) return [];
+  if (typeof value === "string" || typeof value === "number") return [String(value)];
+  if (Array.isArray(value)) return value.flatMap(flattenDetailValues);
+  if (typeof value === "object") return Object.values(value).flatMap(flattenDetailValues);
+  return [];
+}
+
 function renderSearch() {
-  const grid = $("#searchGrid");
-  const empty = $("#searchEmpty");
-  const q = $("#searchInput").value.trim().toLowerCase();
+  const query = $("#searchInput").value.trim().toLowerCase();
   const category = $("#searchCategoryFilter").value;
   const stage = $("#searchStageFilter").value;
-  grid.innerHTML = "";
 
-  const list = ideas.filter((idea) => {
+  const ideaGrid = $("#searchGrid");
+  const fragmentList = $("#searchFragmentList");
+  ideaGrid.innerHTML = "";
+  fragmentList.innerHTML = "";
+
+  const ideaResults = ideas.filter((idea) => {
     const haystack = [
-      idea.title,
-      idea.body,
-      idea.memo,
-      idea.project,
-      idea.category,
-      idea.mood
+      idea.title, idea.body, idea.memo, idea.project, idea.category,
+      ...tagNames(idea.tags),
+      ...flattenDetailValues(idea.details || {})
     ].join(" ").toLowerCase();
-
-    if (q && !haystack.includes(q)) return false;
+    if (query && !haystack.includes(query)) return false;
     if (category !== "all" && idea.category !== category) return false;
     if (stage !== "all" && idea.stage !== stage) return false;
     return true;
   });
 
-  list.forEach((idea) => grid.appendChild(createIdeaCard(idea)));
-  empty.classList.toggle("hidden", list.length > 0);
+  const fragmentResults = fragments.filter((fragment) => {
+    const haystack = [fragment.text, fragment.kind, ...tagNames(fragment.tags)].join(" ").toLowerCase();
+    return !query || haystack.includes(query);
+  });
+
+  ideaResults.forEach((idea) => ideaGrid.appendChild(createIdeaCard(idea)));
+  fragmentResults.forEach((fragment) => fragmentList.appendChild(createFragmentCard(fragment, { compact: true })));
+  $("#searchIdeaEmpty").classList.toggle("hidden", ideaResults.length > 0);
+  $("#searchFragmentEmpty").classList.toggle("hidden", fragmentResults.length > 0);
 }
 
 function renderTodaySeed() {
   const card = $("#todayCard");
   const candidates = ideas.filter((idea) => idea.status === "active");
-
   if (!candidates.length) {
     card.innerHTML = `
       <div class="today-label">今日の種</div>
       <div class="today-title">まだ庭は空っぽです。</div>
-      <p class="today-note">最初の一粒を植えると、ここに昔のアイデアが戻ってくるようになります。</p>
+      <p class="today-note">断片の中から育てたくなったものを、庭へ移してみてもいい。</p>
     `;
     return;
   }
@@ -627,664 +1193,52 @@ function renderTodaySeed() {
   const idea = sorted[hash % sorted.length];
 
   card.innerHTML = `
-    <button type="button" data-id="${idea.id}">
+    <button type="button">
       <div class="today-label">今日の種</div>
       <div class="today-title">${escapeHTML(displayTitle(idea))}</div>
-      <p class="today-note">${escapeHTML(daysAgo(idea.createdAt))}に植えたアイデアです。${
-        getRelationCount(idea.id)
-          ? `今は ${getRelationCount(idea.id)} 個の種と繋がっています。`
-          : "まだ静かに一人で眠っています。"
-      }</p>
+      <p class="today-note">${escapeHTML(daysAgo(idea.createdAt))}に植えたアイデアです。${getRelationCount(idea.id) ? `今は ${getRelationCount(idea.id)} 個の種と繋がっています。` : "まだ静かに一人で眠っています。"}</p>
     </button>
   `;
   card.querySelector("button").addEventListener("click", () => openDetail(idea.id));
 }
 
 function renderAll() {
+  computeTagStats();
   renderGarden();
+  renderFragments();
   renderSpecimens();
   renderCemetery();
   renderSearch();
   renderTodaySeed();
-  renderGraphControls();
-  if (currentView === "relations") {
-    renderRelationGraph({ fit: false });
-  }
+  renderTagManageList();
+  renderAllTagSelectors();
 }
 
-/* ---------- Correlation graph ---------- */
-
-function ensureGraphFocus() {
-  if (graphFocusId && ideas.some((idea) => idea.id === graphFocusId)) return;
-  if (!ideas.length) {
-    graphFocusId = null;
-    return;
-  }
-
-  const ranked = [...ideas].sort((a, b) => {
-    const relationDiff = getRelationCount(b.id) - getRelationCount(a.id);
-    if (relationDiff) return relationDiff;
-    return new Date(b.updatedAt) - new Date(a.updatedAt);
-  });
-  graphFocusId = ranked[0].id;
-}
-
-function renderGraphControls() {
-  const focusButton = $("#graphFocusMode");
-  const allButton = $("#graphAllMode");
-  if (!focusButton || !allButton) return;
-
-  focusButton.classList.toggle("is-selected", graphMode === "focus");
-  allButton.classList.toggle("is-selected", graphMode === "all");
-  focusButton.setAttribute("aria-checked", String(graphMode === "focus"));
-  allButton.setAttribute("aria-checked", String(graphMode === "all"));
-
-  const pickerWrap = $("#graphFocusPickerWrap");
-  if (pickerWrap) pickerWrap.classList.toggle("hidden", graphMode === "all");
-
-  const select = $("#graphFocusSelect");
-  if (!select) return;
-  const previous = graphFocusId;
-  select.innerHTML = "";
-
-  if (!ideas.length) {
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = "種がありません";
-    select.appendChild(option);
-    select.disabled = true;
-    return;
-  }
-
-  select.disabled = false;
-  [...ideas]
-    .sort((a, b) => displayTitle(a).localeCompare(displayTitle(b), "ja"))
-    .forEach((idea) => {
-      const option = document.createElement("option");
-      option.value = idea.id;
-      option.textContent = `${stageInfo(idea.stage).icon} ${displayTitle(idea)}`;
-      select.appendChild(option);
-    });
-
-  if (ideas.some((idea) => idea.id === previous)) select.value = previous;
-}
-
-function getRelationBetween(a, b) {
-  return relations.find((relation) =>
-    (relation.sourceIdeaId === a && relation.targetIdeaId === b) ||
-    (relation.sourceIdeaId === b && relation.targetIdeaId === a)
-  );
-}
-
-function buildFocusGraph() {
-  ensureGraphFocus();
-  const center = ideas.find((idea) => idea.id === graphFocusId);
-  if (!center) return { nodes: [], edges: [] };
-
-  const connectedRelations = relations.filter((relation) =>
-    relation.sourceIdeaId === center.id || relation.targetIdeaId === center.id
-  );
-
-  const neighborIds = [...new Set(connectedRelations.map((relation) =>
-    relation.sourceIdeaId === center.id ? relation.targetIdeaId : relation.sourceIdeaId
-  ))];
-
-  const neighbors = neighborIds
-    .map((id) => ideas.find((idea) => idea.id === id))
-    .filter(Boolean);
-
-  const nodes = [{
-    ...center,
-    graphX: 0,
-    graphY: 0,
-    isCenter: true
-  }];
-
-  /*
-   * Direct connections are distributed over multiple rings.
-   * This keeps large hubs readable instead of squeezing every node onto one circle.
-   */
-  let cursor = 0;
-  let ringIndex = 0;
-  while (cursor < neighbors.length) {
-    const capacity = 8 + ringIndex * 4;
-    const ringItems = neighbors.slice(cursor, cursor + capacity);
-    const radius = 235 + ringIndex * 185;
-    const angleOffset = ringIndex % 2 ? Math.PI / Math.max(6, ringItems.length) : 0;
-
-    ringItems.forEach((idea, index) => {
-      const angle = -Math.PI / 2 + angleOffset +
-        (Math.PI * 2 * index / Math.max(1, ringItems.length));
-      nodes.push({
-        ...idea,
-        graphX: Math.cos(angle) * radius,
-        graphY: Math.sin(angle) * radius,
-        isCenter: false
-      });
-    });
-
-    cursor += ringItems.length;
-    ringIndex += 1;
-  }
-
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  /* Also draw any relationship that exists between the visible neighboring nodes. */
-  const edges = relations.filter((relation) =>
-    nodeIds.has(relation.sourceIdeaId) && nodeIds.has(relation.targetIdeaId)
-  );
-
-  return { nodes, edges };
-}
-
-function seededUnit(id) {
-  let hash = 2166136261;
-  for (const ch of String(id)) {
-    hash ^= ch.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return ((hash >>> 0) % 100000) / 100000;
-}
-
-function buildFullGraph() {
-  if (!ideas.length) return { nodes: [], edges: [] };
-
-  const nodes = ideas.map((idea, index) => {
-    const angle = seededUnit(idea.id) * Math.PI * 2;
-    const ring = 170 + Math.sqrt(index + 1) * 72;
-    return {
-      ...idea,
-      graphX: Math.cos(angle) * ring,
-      graphY: Math.sin(angle) * ring,
-      vx: 0,
-      vy: 0,
-      isCenter: false
-    };
-  });
-
-  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-  const edges = relations.filter((relation) =>
-    nodeMap.has(relation.sourceIdeaId) && nodeMap.has(relation.targetIdeaId)
-  );
-
-  const count = nodes.length;
-  const iterations = count <= 70 ? 180 : count <= 150 ? 105 : 62;
-  const repulsion = count <= 90 ? 42000 : 30000;
-  const springLength = count <= 90 ? 205 : 175;
-  const springStrength = .0047;
-  const gravity = .003;
-  const damping = .78;
-
-  for (let tick = 0; tick < iterations; tick += 1) {
-    for (const node of nodes) {
-      node.vx *= damping;
-      node.vy *= damping;
-      node.vx += -node.graphX * gravity;
-      node.vy += -node.graphY * gravity;
-    }
-
-    for (let i = 0; i < count; i += 1) {
-      const a = nodes[i];
-      for (let j = i + 1; j < count; j += 1) {
-        const b = nodes[j];
-        let dx = b.graphX - a.graphX;
-        let dy = b.graphY - a.graphY;
-        let dist2 = dx * dx + dy * dy;
-        if (dist2 < 250) {
-          dx += (seededUnit(a.id + b.id) - .5) * 12;
-          dy += (seededUnit(b.id + a.id) - .5) * 12;
-          dist2 = dx * dx + dy * dy;
-        }
-        const dist = Math.sqrt(dist2) || 1;
-        const force = repulsion / Math.max(900, dist2);
-        const fx = dx / dist * force;
-        const fy = dy / dist * force;
-        a.vx -= fx;
-        a.vy -= fy;
-        b.vx += fx;
-        b.vy += fy;
-      }
-    }
-
-    for (const edge of edges) {
-      const source = nodeMap.get(edge.sourceIdeaId);
-      const target = nodeMap.get(edge.targetIdeaId);
-      if (!source || !target) continue;
-      const dx = target.graphX - source.graphX;
-      const dy = target.graphY - source.graphY;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const force = (dist - springLength) * springStrength;
-      const fx = dx / dist * force;
-      const fy = dy / dist * force;
-      source.vx += fx;
-      source.vy += fy;
-      target.vx -= fx;
-      target.vy -= fy;
-    }
-
-    for (const node of nodes) {
-      node.graphX += Math.max(-12, Math.min(12, node.vx));
-      node.graphY += Math.max(-12, Math.min(12, node.vy));
-    }
-  }
-
-  /* Put isolated ideas around the outer edge so they remain visible but do not crowd clusters. */
-  const degree = new Map(nodes.map((node) => [node.id, 0]));
-  edges.forEach((edge) => {
-    degree.set(edge.sourceIdeaId, (degree.get(edge.sourceIdeaId) || 0) + 1);
-    degree.set(edge.targetIdeaId, (degree.get(edge.targetIdeaId) || 0) + 1);
-  });
-
-  const isolated = nodes.filter((node) => degree.get(node.id) === 0);
-  if (isolated.length) {
-    const connected = nodes.filter((node) => degree.get(node.id) > 0);
-    const maxRadius = Math.max(
-      380,
-      ...connected.map((node) => Math.hypot(node.graphX, node.graphY) + 210)
-    );
-    isolated.forEach((node, index) => {
-      const angle = (Math.PI * 2 * index / isolated.length) - Math.PI / 2;
-      node.graphX = Math.cos(angle) * maxRadius;
-      node.graphY = Math.sin(angle) * maxRadius;
-    });
-  }
-
-  return { nodes, edges };
-}
-
-function graphBounds(layout = graphLayout) {
-  if (!layout.nodes.length) return { minX: -100, minY: -100, maxX: 100, maxY: 100 };
-  const halfW = GRAPH_NODE_W / 2;
-  const halfH = GRAPH_NODE_H / 2;
-  return {
-    minX: Math.min(...layout.nodes.map((node) => node.graphX - halfW)),
-    minY: Math.min(...layout.nodes.map((node) => node.graphY - halfH)),
-    maxX: Math.max(...layout.nodes.map((node) => node.graphX + halfW)),
-    maxY: Math.max(...layout.nodes.map((node) => node.graphY + halfH))
-  };
-}
-
-function shortenEdge(source, target) {
-  const dx = target.graphX - source.graphX;
-  const dy = target.graphY - source.graphY;
-  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-  const ux = dx / dist;
-  const uy = dy / dist;
-  const cut = 82;
-  return {
-    x1: source.graphX + ux * cut,
-    y1: source.graphY + uy * cut * .55,
-    x2: target.graphX - ux * cut,
-    y2: target.graphY - uy * cut * .55
-  };
-}
-
-function svgEl(name, attrs = {}) {
-  const element = document.createElementNS("http://www.w3.org/2000/svg", name);
-  Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, String(value)));
-  return element;
-}
-
-function splitGraphTitle(text, maxChars = 11) {
-  const value = String(text || "");
-  if (value.length <= maxChars) return [value];
-  const first = value.slice(0, maxChars);
-  const rest = value.slice(maxChars, maxChars * 2);
-  return [first, rest ? (value.length > maxChars * 2 ? `${rest.slice(0, maxChars - 1)}…` : rest) : ""].filter(Boolean);
-}
-
-function createGraphNode(node) {
-  const group = svgEl("g", {
-    class: `graph-node${node.isCenter ? " is-center" : ""}${node.status === "buried" ? " is-buried" : ""}`,
-    transform: `translate(${node.graphX} ${node.graphY})`,
-    "data-id": node.id,
-    "data-stage": node.stage || "seed",
-    tabindex: "0",
-    role: "button",
-    "aria-label": `${displayTitle(node)}。${stageInfo(node.stage).label}。${node.category || "未分類"}`
-  });
-
-  const rect = svgEl("rect", {
-    class: "node-card",
-    x: -GRAPH_NODE_W / 2,
-    y: -GRAPH_NODE_H / 2,
-    width: GRAPH_NODE_W,
-    height: GRAPH_NODE_H,
-    rx: node.isCenter ? 18 : 14,
-    ry: node.isCenter ? 18 : 14
-  });
-  group.appendChild(rect);
-
-  const icon = svgEl("text", {
-    class: "node-icon",
-    x: -GRAPH_NODE_W / 2 + 13,
-    y: -GRAPH_NODE_H / 2 + 24
-  });
-  icon.textContent = stageInfo(node.stage).icon;
-  group.appendChild(icon);
-
-  const titleLines = splitGraphTitle(displayTitle(node));
-  titleLines.forEach((line, index) => {
-    const text = svgEl("text", {
-      class: "node-title",
-      x: -GRAPH_NODE_W / 2 + 41,
-      y: -GRAPH_NODE_H / 2 + 20 + index * 14
-    });
-    text.textContent = line;
-    group.appendChild(text);
-  });
-
-  const meta = svgEl("text", {
-    class: "node-meta",
-    x: -GRAPH_NODE_W / 2 + 13,
-    y: GRAPH_NODE_H / 2 - 12
-  });
-  meta.textContent = `${node.category || "未分類"} ・ ${node.project || "未所属"}`;
-  group.appendChild(meta);
-
-  if (node.status !== "active") {
-    const badge = svgEl("rect", {
-      class: "node-badge",
-      x: GRAPH_NODE_W / 2 - 47,
-      y: GRAPH_NODE_H / 2 - 27,
-      width: 37,
-      height: 16,
-      rx: 8
-    });
-    group.appendChild(badge);
-
-    const statusText = svgEl("text", {
-      class: "node-status",
-      x: GRAPH_NODE_W / 2 - 28.5,
-      y: GRAPH_NODE_H / 2 - 16,
-      "text-anchor": "middle"
-    });
-    statusText.textContent = node.status === "buried" ? "墓地" : "標本";
-    group.appendChild(statusText);
-  }
-
-  const activate = () => {
-    if (graphMode === "focus" && node.id === graphFocusId) {
-      openDetail(node.id);
-      return;
-    }
-    graphFocusId = node.id;
-    graphMode = "focus";
-    renderGraphControls();
-    renderRelationGraph({ fit: true });
-  };
-
-  group.addEventListener("click", (event) => {
-    event.stopPropagation();
-    activate();
-  });
-  group.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      activate();
-    }
-  });
-  group.addEventListener("pointerdown", (event) => event.stopPropagation());
-
-  return group;
-}
-
-function renderRelationGraph({ fit = false } = {}) {
-  const svg = $("#relationGraph");
-  const nodesGroup = $("#graphNodes");
-  const edgesGroup = $("#graphEdges");
-  const empty = $("#graphEmpty");
-  const caption = $("#graphCaption");
-  if (!svg || !nodesGroup || !edgesGroup || !empty || !caption) return;
-
-  ensureGraphFocus();
-  renderGraphControls();
-
-  graphLayout = graphMode === "focus" ? buildFocusGraph() : buildFullGraph();
-  nodesGroup.innerHTML = "";
-  edgesGroup.innerHTML = "";
-
-  if (!graphLayout.nodes.length) {
-    empty.classList.remove("hidden");
-    caption.textContent = "種を追加すると、ここに思考の繋がりが現れます。";
-    return;
-  }
-
-  empty.classList.add("hidden");
-  const nodeMap = new Map(graphLayout.nodes.map((node) => [node.id, node]));
-
-  graphLayout.edges.forEach((edge) => {
-    const source = nodeMap.get(edge.sourceIdeaId);
-    const target = nodeMap.get(edge.targetIdeaId);
-    if (!source || !target) return;
-    const p = shortenEdge(source, target);
-    const line = svgEl("line", {
-      class: `graph-edge${edge.relationType === "derived" ? " is-derived" : ""}`,
-      x1: p.x1,
-      y1: p.y1,
-      x2: p.x2,
-      y2: p.y2
-    });
-    edgesGroup.appendChild(line);
-  });
-
-  graphLayout.nodes.forEach((node) => nodesGroup.appendChild(createGraphNode(node)));
-
-  if (graphMode === "focus") {
-    const focus = ideas.find((idea) => idea.id === graphFocusId);
-    const relationCount = focus ? getRelationCount(focus.id) : 0;
-    caption.textContent = focus
-      ? `「${displayTitle(focus)}」を中心に、直接繋がっている ${relationCount} 件を表示中。周囲の種を押すと、その種へ中心が移ります。中心の種をもう一度押すと詳細を開きます。`
-      : "";
-  } else {
-    const isolatedCount = graphLayout.nodes.filter((node) => getRelationCount(node.id) === 0).length;
-    caption.textContent = `全 ${graphLayout.nodes.length} 件・繋がり ${graphLayout.edges.length} 本を表示中。関連のない種も外側に表示します。種を押すと、その種を中心にした表示へ移ります。${isolatedCount ? ` 未接続は ${isolatedCount} 件。` : ""}`;
-  }
-
-  requestAnimationFrame(() => {
-    updateGraphTransform();
-    if (fit || graphFitPending) {
-      graphFitPending = false;
-      fitGraphToViewport();
-    }
-  });
-}
-
-function graphViewportSize() {
-  const svg = $("#relationGraph");
-  const rect = svg?.getBoundingClientRect();
-  return {
-    width: Math.max(1, rect?.width || 1),
-    height: Math.max(1, rect?.height || 1)
-  };
-}
-
-function clampGraphScale(value) {
-  return Math.max(GRAPH_MIN_SCALE, Math.min(GRAPH_MAX_SCALE, value));
-}
-
-function updateGraphTransform() {
-  const world = $("#graphWorld");
-  if (!world) return;
-  world.setAttribute(
-    "transform",
-    `translate(${graphTransform.x} ${graphTransform.y}) scale(${graphTransform.scale})`
-  );
-}
-
-function fitGraphToViewport() {
-  if (!graphLayout.nodes.length) return;
-  const { width, height } = graphViewportSize();
-  const bounds = graphBounds();
-  const graphW = Math.max(1, bounds.maxX - bounds.minX);
-  const graphH = Math.max(1, bounds.maxY - bounds.minY);
-  const padding = graphMode === "focus" ? 52 : 72;
-  const scale = clampGraphScale(Math.min(
-    (width - padding * 2) / graphW,
-    (height - padding * 2) / graphH,
-    graphMode === "focus" ? 1.15 : .96
-  ));
-  const cx = (bounds.minX + bounds.maxX) / 2;
-  const cy = (bounds.minY + bounds.maxY) / 2;
-  graphTransform = {
-    scale,
-    x: width / 2 - cx * scale,
-    y: height / 2 - cy * scale
-  };
-  updateGraphTransform();
-}
-
-function zoomGraphAt(factor, clientX = null, clientY = null) {
-  const svg = $("#relationGraph");
-  if (!svg) return;
-  const rect = svg.getBoundingClientRect();
-  const pointX = clientX == null ? rect.left + rect.width / 2 : clientX;
-  const pointY = clientY == null ? rect.top + rect.height / 2 : clientY;
-  const localX = pointX - rect.left;
-  const localY = pointY - rect.top;
-
-  const oldScale = graphTransform.scale;
-  const newScale = clampGraphScale(oldScale * factor);
-  if (Math.abs(newScale - oldScale) < .0001) return;
-
-  const worldX = (localX - graphTransform.x) / oldScale;
-  const worldY = (localY - graphTransform.y) / oldScale;
-  graphTransform.scale = newScale;
-  graphTransform.x = localX - worldX * newScale;
-  graphTransform.y = localY - worldY * newScale;
-  updateGraphTransform();
-}
-
-function graphPointerDown(event) {
-  const svg = $("#relationGraph");
-  if (!svg) return;
-  graphPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-  svg.setPointerCapture?.(event.pointerId);
-
-  if (graphPointers.size === 1) {
-    graphPanState = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: graphTransform.x,
-      originY: graphTransform.y
-    };
-    svg.classList.add("is-panning");
-  } else if (graphPointers.size === 2) {
-    const points = [...graphPointers.values()];
-    const dx = points[1].x - points[0].x;
-    const dy = points[1].y - points[0].y;
-    graphPinchState = {
-      distance: Math.hypot(dx, dy) || 1,
-      scale: graphTransform.scale,
-      midpointX: (points[0].x + points[1].x) / 2,
-      midpointY: (points[0].y + points[1].y) / 2
-    };
-    graphPanState = null;
-  }
-}
-
-function graphPointerMove(event) {
-  if (!graphPointers.has(event.pointerId)) return;
-  graphPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-  if (graphPointers.size >= 2) {
-    const points = [...graphPointers.values()].slice(0, 2);
-    const dx = points[1].x - points[0].x;
-    const dy = points[1].y - points[0].y;
-    const distance = Math.hypot(dx, dy) || 1;
-    const midpointX = (points[0].x + points[1].x) / 2;
-    const midpointY = (points[0].y + points[1].y) / 2;
-
-    if (!graphPinchState) {
-      graphPinchState = {
-        distance,
-        scale: graphTransform.scale,
-        midpointX,
-        midpointY
-      };
-      return;
-    }
-
-    const targetScale = clampGraphScale(
-      graphPinchState.scale * (distance / graphPinchState.distance)
-    );
-    const svg = $("#relationGraph");
-    const rect = svg.getBoundingClientRect();
-    const localX = midpointX - rect.left;
-    const localY = midpointY - rect.top;
-    const oldScale = graphTransform.scale;
-    const worldX = (localX - graphTransform.x) / oldScale;
-    const worldY = (localY - graphTransform.y) / oldScale;
-    graphTransform.scale = targetScale;
-    graphTransform.x = localX - worldX * targetScale;
-    graphTransform.y = localY - worldY * targetScale;
-    updateGraphTransform();
-    return;
-  }
-
-  if (graphPanState && graphPanState.pointerId === event.pointerId) {
-    graphTransform.x = graphPanState.originX + (event.clientX - graphPanState.startX);
-    graphTransform.y = graphPanState.originY + (event.clientY - graphPanState.startY);
-    updateGraphTransform();
-  }
-}
-
-function graphPointerEnd(event) {
-  graphPointers.delete(event.pointerId);
-  const svg = $("#relationGraph");
-  svg?.releasePointerCapture?.(event.pointerId);
-
-  if (graphPointers.size < 2) graphPinchState = null;
-  if (graphPointers.size === 1) {
-    const [remainingId, point] = [...graphPointers.entries()][0];
-    graphPanState = {
-      pointerId: remainingId,
-      startX: point.x,
-      startY: point.y,
-      originX: graphTransform.x,
-      originY: graphTransform.y
-    };
-  } else if (graphPointers.size === 0) {
-    graphPanState = null;
-    svg?.classList.remove("is-panning");
-  }
-}
-
-function switchGraphMode(mode) {
-  if (!["focus", "all"].includes(mode) || graphMode === mode) return;
-  graphMode = mode;
-  renderGraphControls();
-  renderRelationGraph({ fit: true });
-}
-
-/* ---------- Quick add / detail ---------- */
-
-function openQuickAdd() {
-  $("#quickAddModal").classList.remove("hidden");
-  setTimeout(() => $("#quickBody").focus(), 30);
-}
-
-function closeModal(id) {
-  $("#" + id).classList.add("hidden");
-}
-
+/* Seed quick add */
 function resetQuickAdd() {
   $("#quickBody").value = "";
   $("#quickTitle").value = "";
   $("#quickProject").value = "";
-  $("#quickCategory").value = "未分類";
-  $("#quickMood").value = "未設定";
+  quickSelectedTags = new Set();
+  tagExpanded.quick = false;
+  setCategoryPicker("quick", "未分類");
   const details = $(".optional-fields");
   if (details) details.open = false;
+  renderTagSelector("quick");
+}
+
+function openQuickAddModal() {
+  resetQuickAdd();
+  $("#quickAddModal").classList.remove("hidden");
+  setTimeout(() => $("#quickBody").focus(), 40);
 }
 
 async function saveQuickIdea() {
   const body = $("#quickBody").value.trim();
   if (!body) {
-    toast("一言だけでも種を書いてみて。");
+    toast("育てたいアイデアを一言だけでも書いてみて。");
     return;
   }
-
   const now = new Date().toISOString();
   const idea = {
     id: uid("idea"),
@@ -1293,24 +1247,146 @@ async function saveQuickIdea() {
     category: $("#quickCategory").value,
     stage: "seed",
     project: $("#quickProject").value.trim(),
-    mood: $("#quickMood").value,
     memo: "",
+    details: {},
+    tags: [...quickSelectedTags],
     status: "active",
     createdAt: now,
     updatedAt: now,
     buriedAt: null
   };
-
   await put("ideas", idea);
   await reloadData();
-  graphFocusId = idea.id;
   renderAll();
-  resetQuickAdd();
   closeModal("quickAddModal");
   switchView("garden");
-  toast("新しい種を植えました。");
+  toast("庭へ種を植えました。");
 }
 
+/* Fragment modal */
+function renderFragmentKindChoices() {
+  const row = $("#fragmentKindChoices");
+  row.innerHTML = "";
+  EDIT_FRAGMENT_KINDS.forEach((kind) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `mini-choice${kind === fragmentSelectedKind ? " is-selected" : ""}`;
+    button.textContent = kind;
+    button.addEventListener("click", () => {
+      fragmentSelectedKind = kind;
+      renderFragmentKindChoices();
+    });
+    row.appendChild(button);
+  });
+}
+
+function openFragmentModal(fragmentId = null) {
+  currentFragmentId = fragmentId;
+  const fragment = fragments.find((item) => item.id === fragmentId);
+  fragmentSelectedKind = fragment?.kind || "未分類";
+  fragmentSelectedTags = new Set(fragment?.tags || []);
+  tagExpanded.fragment = false;
+
+  $("#fragmentModalTitle").textContent = fragment ? "断片を編集" : "断片を置く";
+  $("#fragmentText").value = fragment?.text || "";
+  $("#deleteFragmentButton").classList.toggle("hidden", !fragment);
+  renderFragmentKindChoices();
+  renderTagSelector("fragment");
+  $("#fragmentModal").classList.remove("hidden");
+  setTimeout(() => $("#fragmentText").focus(), 40);
+}
+
+async function saveFragment() {
+  const text = $("#fragmentText").value.trim();
+  if (!text) {
+    toast("一言だけでも書いておけます。");
+    return;
+  }
+  const now = new Date().toISOString();
+  const existing = fragments.find((item) => item.id === currentFragmentId);
+  const fragment = existing ? {
+    ...existing,
+    text,
+    kind: fragmentSelectedKind,
+    tags: [...fragmentSelectedTags],
+    updatedAt: now
+  } : {
+    id: uid("fragment"),
+    text,
+    kind: fragmentSelectedKind,
+    tags: [...fragmentSelectedTags],
+    createdAt: now,
+    updatedAt: now
+  };
+  await put("fragments", fragment);
+  await reloadData();
+  renderAll();
+  closeModal("fragmentModal");
+  toast(existing ? "断片を更新しました。" : "断片を置きました。");
+}
+
+async function deleteCurrentFragment() {
+  const fragment = fragments.find((item) => item.id === currentFragmentId);
+  if (!fragment) return;
+  const ok = confirm("この断片を削除しますか？");
+  if (!ok) return;
+  await remove("fragments", fragment.id);
+  currentFragmentId = null;
+  await reloadData();
+  renderAll();
+  closeModal("fragmentModal");
+  toast("断片を削除しました。");
+}
+
+function suggestedCategoryForFragment(fragment) {
+  if (fragment.kind === "台詞") return "台詞";
+  if (fragment.kind === "情景") return "ビジュアル";
+  if (fragment.kind === "設定") return "世界観・設定";
+  return "未分類";
+}
+
+function openTransferModal(fragmentId) {
+  const fragment = fragments.find((item) => item.id === fragmentId);
+  if (!fragment) return;
+  transferFragmentId = fragmentId;
+  $("#transferPreview").textContent = fragment.text;
+  $("#transferIdeaTitle").value = "";
+  setCategoryPicker("transfer", suggestedCategoryForFragment(fragment));
+  closeModal("fragmentModal");
+  $("#transferModal").classList.remove("hidden");
+}
+
+async function confirmTransfer() {
+  const fragment = fragments.find((item) => item.id === transferFragmentId);
+  if (!fragment) return;
+  const now = new Date().toISOString();
+  const idea = {
+    id: uid("idea"),
+    title: $("#transferIdeaTitle").value.trim(),
+    body: fragment.text,
+    category: $("#transferCategory").value,
+    stage: "seed",
+    project: "",
+    memo: "",
+    details: {},
+    tags: [...(fragment.tags || [])],
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+    buriedAt: null
+  };
+  await put("ideas", idea);
+  await remove("fragments", fragment.id);
+  transferFragmentId = null;
+  await reloadData();
+  renderAll();
+  closeModal("transferModal");
+  switchView("garden");
+  openDetail(idea.id);
+  toast("断片を庭へ移しました。");
+}
+
+/* Detail */
 function growthCopy(idea) {
   const categoryCopy = GROWTH[idea.category] || GROWTH.default;
   return categoryCopy[idea.stage] || GROWTH.default.seed;
@@ -1342,12 +1418,14 @@ function renderGrowth(idea) {
 
 function relatedIdeaIds(ideaId) {
   return relations
-    .filter((relation) =>
-      relation.sourceIdeaId === ideaId || relation.targetIdeaId === ideaId
-    )
-    .map((relation) =>
-      relation.sourceIdeaId === ideaId ? relation.targetIdeaId : relation.sourceIdeaId
-    );
+    .filter((relation) => relation.sourceIdeaId === ideaId || relation.targetIdeaId === ideaId)
+    .map((relation) => relation.sourceIdeaId === ideaId ? relation.targetIdeaId : relation.sourceIdeaId);
+}
+
+function getRelationBetween(a, b) {
+  return relations.find((relation) =>
+    (relation.sourceIdeaId === a && relation.targetIdeaId === b) ||
+    (relation.sourceIdeaId === b && relation.targetIdeaId === a));
 }
 
 function renderRelations(ideaId) {
@@ -1357,9 +1435,7 @@ function renderRelations(ideaId) {
   select.innerHTML = "";
 
   const ids = relatedIdeaIds(ideaId);
-  const related = ids
-    .map((id) => ideas.find((idea) => idea.id === id))
-    .filter(Boolean);
+  const related = ids.map((id) => ideas.find((idea) => idea.id === id)).filter(Boolean);
 
   if (!related.length) {
     const empty = document.createElement("div");
@@ -1369,32 +1445,25 @@ function renderRelations(ideaId) {
   } else {
     related.forEach((idea) => {
       const relation = getRelationBetween(ideaId, idea.id);
+      const prefix = relation?.relationType === "derived"
+        ? (relation.sourceIdeaId === ideaId ? "→" : "←") : "⌁";
       const row = document.createElement("div");
       row.className = "relation-item";
-      const prefix = relation?.relationType === "derived"
-        ? (relation.sourceIdeaId === ideaId ? "→" : "←")
-        : "⌁";
       row.innerHTML = `
         <span>${prefix} ${stageInfo(idea.stage).icon} ${escapeHTML(displayTitle(idea))}</span>
-        <button type="button" data-remove-relation="${idea.id}" aria-label="関連を外す">×</button>
+        <button type="button" aria-label="関連を外す">×</button>
       `;
-      row.querySelector("button").addEventListener("click", () =>
-        removeRelationBetween(ideaId, idea.id)
-      );
+      row.querySelector("button").addEventListener("click", () => removeRelationBetween(ideaId, idea.id));
       list.appendChild(row);
     });
   }
 
   const available = ideas.filter((idea) =>
-    idea.id !== ideaId && !ids.includes(idea.id) && idea.status !== "buried"
-  );
+    idea.id !== ideaId && !ids.includes(idea.id) && idea.status !== "buried");
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = available.length
-    ? "繋げたい種を選ぶ"
-    : "繋げられる種がありません";
+  placeholder.textContent = available.length ? "繋げたい種を選ぶ" : "繋げられる種がありません";
   select.appendChild(placeholder);
-
   available.forEach((idea) => {
     const option = document.createElement("option");
     option.value = idea.id;
@@ -1407,18 +1476,20 @@ function openDetail(ideaId) {
   const idea = ideas.find((item) => item.id === ideaId);
   if (!idea) return;
   currentIdeaId = ideaId;
-  graphFocusId = ideaId;
+  structuredDraft = JSON.parse(JSON.stringify(idea.details || {}));
+  detailSelectedTags = new Set(idea.tags || []);
+  tagExpanded.detail = false;
 
   $("#detailHeading").textContent = displayTitle(idea);
   $("#detailMeta").textContent = `${formatDate(idea.createdAt)} ・ ${idea.project || "未所属"}`;
   $("#detailTitle").value = idea.title || "";
   $("#detailBody").value = idea.body || "";
-  $("#detailCategory").value = idea.category || "未分類";
   $("#detailProject").value = idea.project || "";
-  $("#detailMood").value = idea.mood || "未設定";
   $("#detailStatus").value = idea.status || "active";
   $("#detailMemo").value = idea.memo || "";
-
+  setCategoryPicker("detail", idea.category || "未分類");
+  renderStructuredFields(idea.category || "未分類");
+  renderTagSelector("detail");
   renderGrowth(idea);
   renderRelations(ideaId);
   $("#detailModal").classList.remove("hidden");
@@ -1427,6 +1498,7 @@ function openDetail(ideaId) {
 async function saveDetail() {
   const idea = ideas.find((item) => item.id === currentIdeaId);
   if (!idea) return;
+  collectStructuredFields();
 
   const oldStatus = idea.status;
   const newStatus = $("#detailStatus").value;
@@ -1434,9 +1506,10 @@ async function saveDetail() {
   idea.body = $("#detailBody").value.trim();
   idea.category = $("#detailCategory").value;
   idea.project = $("#detailProject").value.trim();
-  idea.mood = $("#detailMood").value;
   idea.status = newStatus;
   idea.memo = $("#detailMemo").value.trim();
+  idea.details = { ...structuredDraft };
+  idea.tags = [...detailSelectedTags];
   idea.updatedAt = new Date().toISOString();
 
   if (newStatus === "buried" && oldStatus !== "buried") {
@@ -1465,10 +1538,7 @@ async function changeStage(direction) {
   await reloadData();
   renderAll();
   openDetail(idea.id);
-  toast(idea.stage === "flower"
-    ? "花が開きました。"
-    : `${stageInfo(idea.stage).label}に育ちました。`
-  );
+  toast(idea.stage === "flower" ? "花が開きました。" : `${stageInfo(idea.stage).label}に育ちました。`);
 }
 
 async function addRelation() {
@@ -1477,9 +1547,7 @@ async function addRelation() {
 
   const exists = relations.some((relation) =>
     (relation.sourceIdeaId === currentIdeaId && relation.targetIdeaId === targetId) ||
-    (relation.sourceIdeaId === targetId && relation.targetIdeaId === currentIdeaId)
-  );
-
+    (relation.sourceIdeaId === targetId && relation.targetIdeaId === currentIdeaId));
   if (exists) {
     toast("その種とはすでに繋がっています。");
     return;
@@ -1492,7 +1560,6 @@ async function addRelation() {
     relationType: "related",
     createdAt: new Date().toISOString()
   });
-
   await reloadData();
   renderAll();
   renderRelations(currentIdeaId);
@@ -1502,10 +1569,8 @@ async function addRelation() {
 async function removeRelationBetween(a, b) {
   const relation = relations.find((item) =>
     (item.sourceIdeaId === a && item.targetIdeaId === b) ||
-    (item.sourceIdeaId === b && item.targetIdeaId === a)
-  );
+    (item.sourceIdeaId === b && item.targetIdeaId === a));
   if (!relation) return;
-
   await remove("relations", relation.id);
   await reloadData();
   renderAll();
@@ -1516,7 +1581,7 @@ async function removeRelationBetween(a, b) {
 async function duplicateIdea() {
   const source = ideas.find((item) => item.id === currentIdeaId);
   if (!source) return;
-
+  collectStructuredFields();
   const now = new Date().toISOString();
   const child = {
     ...source,
@@ -1524,11 +1589,12 @@ async function duplicateIdea() {
     title: source.title ? `${source.title} - 派生` : "",
     stage: "seed",
     status: "active",
+    details: { ...structuredDraft },
+    tags: [...detailSelectedTags],
     createdAt: now,
     updatedAt: now,
     buriedAt: null
   };
-
   await put("ideas", child);
   await put("relations", {
     id: uid("rel"),
@@ -1537,9 +1603,7 @@ async function duplicateIdea() {
     relationType: "derived",
     createdAt: now
   });
-
   await reloadData();
-  graphFocusId = child.id;
   renderAll();
   openDetail(child.id);
   toast("ここから新しい種を落としました。");
@@ -1548,49 +1612,48 @@ async function duplicateIdea() {
 async function deleteCurrentIdea() {
   const idea = ideas.find((item) => item.id === currentIdeaId);
   if (!idea) return;
-
   const ok = confirm(`「${displayTitle(idea)}」を完全に削除しますか？\n墓地ではなく、本当に消えます。`);
   if (!ok) return;
 
   const toDelete = relations.filter((relation) =>
-    relation.sourceIdeaId === idea.id || relation.targetIdeaId === idea.id
-  );
-  for (const relation of toDelete) {
-    await remove("relations", relation.id);
-  }
-
+    relation.sourceIdeaId === idea.id || relation.targetIdeaId === idea.id);
+  for (const relation of toDelete) await remove("relations", relation.id);
   await remove("ideas", idea.id);
   currentIdeaId = null;
-  if (graphFocusId === idea.id) graphFocusId = null;
   await reloadData();
   renderAll();
   closeModal("detailModal");
   toast("種を完全に削除しました。");
 }
 
-/* ---------- Navigation / events ---------- */
+/* Navigation */
+function closeModal(id) {
+  $("#" + id)?.classList.add("hidden");
+  closeCategoryMenus();
+}
 
 function switchView(target) {
   currentView = target;
   $$(".view").forEach((view) =>
-    view.classList.toggle("is-active", view.dataset.view === target)
-  );
+    view.classList.toggle("is-active", view.dataset.view === target));
   $$(".nav-item").forEach((item) =>
-    item.classList.toggle("is-active", item.dataset.target === target)
-  );
-
+    item.classList.toggle("is-active", item.dataset.target === target));
   window.scrollTo({ top: 0, behavior: "smooth" });
 
-  if (target === "search") {
-    setTimeout(() => $("#searchInput").focus(), 80);
+  const add = $("#openQuickAdd");
+  if (add) {
+    add.setAttribute("aria-label", target === "fragments" ? "断片を追加する" : "種を追加する");
   }
+  if (target === "search") setTimeout(() => $("#searchInput").focus(), 70);
   if (target === "settings") {
     renderSettingsControls();
+    renderTagManageList();
   }
-  if (target === "relations") {
-    graphFitPending = true;
-    renderRelationGraph({ fit: true });
-  }
+}
+
+function handleFloatingAdd() {
+  if (currentView === "fragments") openFragmentModal();
+  else openQuickAddModal();
 }
 
 function toast(message) {
@@ -1598,21 +1661,42 @@ function toast(message) {
   el.textContent = message;
   el.classList.remove("hidden");
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => el.classList.add("hidden"), 2200);
+  toast.timer = setTimeout(() => el.classList.add("hidden"), 2100);
 }
 
-function escapeHTML(value = "") {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+/* iPhone interaction guards */
+function isEditableTarget(target) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
+function bindInteractionGuards() {
+  document.addEventListener("contextmenu", (event) => {
+    if (!isEditableTarget(event.target)) event.preventDefault();
+  });
+  document.addEventListener("selectstart", (event) => {
+    if (!isEditableTarget(event.target)) event.preventDefault();
+  });
+  document.addEventListener("dragstart", (event) => {
+    if (!isEditableTarget(event.target)) event.preventDefault();
+  });
+  document.addEventListener("dblclick", (event) => {
+    if (!isEditableTarget(event.target)) event.preventDefault();
+  }, { passive: false });
+  document.addEventListener("gesturestart", (event) => {
+    event.preventDefault();
+  }, { passive: false });
+}
+
+/* Events */
 function bindEvents() {
-  $("#openQuickAdd").addEventListener("click", openQuickAdd);
+  $("#openQuickAdd").addEventListener("click", handleFloatingAdd);
   $("#saveQuickIdea").addEventListener("click", saveQuickIdea);
+
+  $("#saveFragmentButton").addEventListener("click", saveFragment);
+  $("#deleteFragmentButton").addEventListener("click", deleteCurrentFragment);
+  $("#confirmTransferButton").addEventListener("click", confirmTransfer);
+
   $("#saveDetail").addEventListener("click", saveDetail);
   $("#stageDown").addEventListener("click", () => changeStage(-1));
   $("#stageUp").addEventListener("click", () => changeStage(1));
@@ -1627,87 +1711,77 @@ function bindEvents() {
   $$("[data-theme-mode]").forEach((button) => {
     button.addEventListener("click", () => selectThemeMode(button.dataset.themeMode));
   });
-
   $$("[data-background-mode]").forEach((button) => {
     button.addEventListener("click", () => selectBackgroundMode(button.dataset.backgroundMode));
+  });
+  $$("[data-tag-sort]").forEach((button) => {
+    button.addEventListener("click", () => selectTagSort(button.dataset.tagSort));
+  });
+
+  $$("[data-tag-expand]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const context = button.dataset.tagExpand;
+      tagExpanded[context] = !tagExpanded[context];
+      button.textContent = tagExpanded[context] ? "上位だけ" : (context === "detail" ? "タグを選ぶ" : "すべて");
+      renderTagSelector(context);
+    });
+  });
+
+  $("#createTagButton").addEventListener("click", createTag);
+  $("#newTagInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      createTag();
+    }
   });
 
   $$("[data-close]").forEach((button) => {
     button.addEventListener("click", () => closeModal(button.dataset.close));
   });
-
   $$(".modal-backdrop").forEach((backdrop) => {
     backdrop.addEventListener("click", (event) => {
-      if (event.target === backdrop) backdrop.classList.add("hidden");
+      if (event.target === backdrop) {
+        backdrop.classList.add("hidden");
+        closeCategoryMenus();
+      }
     });
   });
 
   $("#gardenStageFilter").addEventListener("change", renderGarden);
-  $("#gardenCategoryFilter").addEventListener("change", renderGarden);
+  $("#fragmentSearchInput").addEventListener("input", renderFragments);
   $("#searchInput").addEventListener("input", renderSearch);
-  $("#searchCategoryFilter").addEventListener("change", renderSearch);
   $("#searchStageFilter").addEventListener("change", renderSearch);
 
-  $("#detailCategory").addEventListener("change", () => {
-    const idea = ideas.find((item) => item.id === currentIdeaId);
-    if (!idea) return;
-    renderGrowth({ ...idea, category: $("#detailCategory").value });
-  });
-
-  $("#graphFocusMode").addEventListener("click", () => switchGraphMode("focus"));
-  $("#graphAllMode").addEventListener("click", () => switchGraphMode("all"));
-  $("#graphFocusSelect").addEventListener("change", (event) => {
-    if (!event.target.value) return;
-    graphFocusId = event.target.value;
-    graphMode = "focus";
-    renderGraphControls();
-    renderRelationGraph({ fit: true });
-  });
-
-  $("#graphZoomIn").addEventListener("click", () => zoomGraphAt(1.25));
-  $("#graphZoomOut").addEventListener("click", () => zoomGraphAt(0.8));
-  $("#graphFit").addEventListener("click", fitGraphToViewport);
-
-  const graph = $("#relationGraph");
-  graph.addEventListener("pointerdown", graphPointerDown);
-  graph.addEventListener("pointermove", graphPointerMove);
-  graph.addEventListener("pointerup", graphPointerEnd);
-  graph.addEventListener("pointercancel", graphPointerEnd);
-  graph.addEventListener("wheel", (event) => {
-    event.preventDefault();
-    zoomGraphAt(event.deltaY < 0 ? 1.12 : 0.89, event.clientX, event.clientY);
-  }, { passive: false });
-
+  document.addEventListener("click", () => closeCategoryMenus());
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   const handleSystemThemeChange = () => {
     if (uiSettings.themeMode !== "system") return;
     applyTheme({ updateBackground: true });
   };
-
   if (typeof systemThemeQuery.addEventListener === "function") {
     systemThemeQuery.addEventListener("change", handleSystemThemeChange);
   } else if (typeof systemThemeQuery.addListener === "function") {
     systemThemeQuery.addListener(handleSystemThemeChange);
   }
 
-  window.addEventListener("resize", () => {
-    if (currentView === "relations") fitGraphToViewport();
-  });
+  bindInteractionGuards();
 }
 
+/* Initial setup */
 async function init() {
-  const badge = $(".version-badge");
-  if (badge) badge.textContent = `v${APP_VERSION}`;
-
-  setupSelects();
+  $(".version-badge").textContent = `v${APP_VERSION}`;
+  buildCategoryPickers();
+  renderFragmentKindFilter();
   bindEvents();
   await initializeBackground();
-  renderSettingsControls();
 
   try {
     db = await openDB();
+    await seedDefaultTags();
     await reloadData();
+    await migrateLegacyMoods();
+    renderSettingsControls();
     renderAll();
   } catch (error) {
     console.error(error);

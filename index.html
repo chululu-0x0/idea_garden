@@ -2,10 +2,10 @@
 <html lang="ja" data-theme="light">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no" />
   <meta name="theme-color" content="#efe9d8" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>idea_garden</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -15,9 +15,10 @@
     <div class="background-layer" id="bgLayerB"></div>
     <div class="background-screen"></div>
   </div>
+  <div class="top-status-fade" aria-hidden="true"></div>
 
   <div class="app-shell">
-    <div class="version-badge">v4</div>
+    <div class="version-badge">v5</div>
 
     <main class="main" id="main">
       <section class="view is-active" data-view="garden">
@@ -31,16 +32,31 @@
             <option value="bud">蕾</option>
             <option value="flower">花</option>
           </select>
-          <select id="gardenCategoryFilter" aria-label="カテゴリ">
-            <option value="all">すべてのカテゴリ</option>
-          </select>
+          <div class="compact-picker filter-picker" data-picker="gardenFilter">
+            <button class="compact-picker-trigger" id="gardenFilterCategoryTrigger" type="button" aria-expanded="false">すべてのカテゴリ</button>
+            <div class="compact-picker-menu hidden" id="gardenFilterCategoryMenu"></div>
+            <input id="gardenCategoryFilter" type="hidden" value="all" />
+          </div>
         </section>
 
         <section class="idea-grid" id="gardenGrid"></section>
         <div class="empty-state hidden" id="gardenEmpty">
           <div class="empty-flower">✦</div>
-          <p>まだ何も植わっていません。</p>
-          <small>右下の＋から、思いつきを一行だけ置いてみても大丈夫。</small>
+          <p>まだ庭は空っぽです。</p>
+          <small>育てたいものだけ、ここへ種として植えておけます。</small>
+        </div>
+      </section>
+
+      <section class="view fragments-view" data-view="fragments">
+        <section class="fragment-tools">
+          <input id="fragmentSearchInput" type="search" placeholder="断片を探す" autocomplete="off" />
+          <div class="fragment-kind-filter" id="fragmentKindFilter" aria-label="断片の種類"></div>
+        </section>
+        <section class="fragment-list" id="fragmentList"></section>
+        <div class="empty-state hidden" id="fragmentEmpty">
+          <div class="empty-flower">〃</div>
+          <p>まだ断片はありません。</p>
+          <small>台詞、言葉、情景、意味のない一文でも、そのまま置いておけます。</small>
         </div>
       </section>
 
@@ -53,55 +69,41 @@
         </div>
       </section>
 
-      <section class="view relations-view" data-view="relations">
-        <section class="graph-toolbar">
-          <div class="graph-mode-switch" role="radiogroup" aria-label="相関図の表示方法">
-            <button class="graph-mode-button is-selected" id="graphFocusMode" type="button" role="radio" aria-checked="true">中心から辿る</button>
-            <button class="graph-mode-button" id="graphAllMode" type="button" role="radio" aria-checked="false">全体を見る</button>
-          </div>
+      <section class="view" data-view="cemetery">
+        <section class="cemetery-grid" id="cemeteryGrid"></section>
+        <div class="empty-state hidden" id="cemeteryEmpty">
+          <div class="empty-flower">☾</div>
+          <p>墓地は静かなままです。</p>
+          <small>使わなくなった種も、消さずに眠らせておけます。</small>
+        </div>
+      </section>
 
-          <div class="graph-focus-picker" id="graphFocusPickerWrap">
-            <label for="graphFocusSelect">中心の種</label>
-            <select id="graphFocusSelect" aria-label="中心に表示する種"></select>
-          </div>
-        </section>
-
-        <section class="graph-legend" aria-label="相関図の凡例">
-          <span>🌰 種</span>
-          <span>🌱 芽</span>
-          <span>🌿 蕾</span>
-          <span>🌸 花</span>
-          <span class="legend-line"><i></i>関連</span>
-          <span class="legend-line legend-derived"><i></i>派生</span>
-        </section>
-
-        <section class="graph-shell">
-          <div class="graph-floating-controls" aria-label="相関図の表示操作">
-            <button id="graphZoomIn" type="button" aria-label="拡大">＋</button>
-            <button id="graphZoomOut" type="button" aria-label="縮小">−</button>
-            <button id="graphFit" type="button" aria-label="全体を収める">⌗</button>
-          </div>
-
-          <svg id="relationGraph" class="relation-graph" aria-label="アイデア相関図" role="img">
-            <defs>
-              <marker id="arrowRelated" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z" class="graph-arrow"></path>
-              </marker>
-            </defs>
-            <g id="graphWorld">
-              <g id="graphEdges"></g>
-              <g id="graphNodes"></g>
-            </g>
-          </svg>
-
-          <div class="graph-empty hidden" id="graphEmpty">
-            <div>⌁</div>
-            <p>まだ相関図に表示できる種がありません。</p>
-            <small>種を追加して、詳細画面から他の種と繋げるとここに現れます。</small>
+      <section class="view" data-view="search">
+        <section class="search-panel">
+          <input id="searchInput" type="search" placeholder="庭と断片をまとめて探す" autocomplete="off" />
+          <div class="search-filters">
+            <div class="compact-picker filter-picker" data-picker="searchFilter">
+              <button class="compact-picker-trigger" id="searchFilterCategoryTrigger" type="button" aria-expanded="false">カテゴリ指定なし</button>
+              <div class="compact-picker-menu hidden" id="searchFilterCategoryMenu"></div>
+              <input id="searchCategoryFilter" type="hidden" value="all" />
+            </div>
+            <select id="searchStageFilter">
+              <option value="all">成長指定なし</option>
+              <option value="seed">種</option>
+              <option value="sprout">芽</option>
+              <option value="bud">蕾</option>
+              <option value="flower">花</option>
+            </select>
           </div>
         </section>
 
-        <section class="graph-caption" id="graphCaption" aria-live="polite"></section>
+        <div class="search-section-head">庭</div>
+        <section class="idea-grid" id="searchGrid"></section>
+        <div class="mini-empty hidden" id="searchIdeaEmpty">庭では見つかりませんでした。</div>
+
+        <div class="search-section-head search-section-spaced">断片</div>
+        <section class="fragment-list compact" id="searchFragmentList"></section>
+        <div class="mini-empty hidden" id="searchFragmentEmpty">断片では見つかりませんでした。</div>
       </section>
 
       <section class="view settings-view" data-view="settings">
@@ -111,24 +113,20 @@
               <span class="settings-mark">☼</span>
               <div>
                 <strong>表示モード</strong>
-                <small>画面全体の明るさと枠の色を切り替えます。</small>
+                <small>端末連動、ライト固定、ダーク固定から選べます。</small>
               </div>
             </div>
-
             <div class="setting-choice-grid theme-choice-grid" role="radiogroup" aria-label="表示モード">
               <button class="setting-choice" type="button" data-theme-mode="system" role="radio" aria-checked="false">
-                <span class="choice-icon">◐</span>
-                <span>端末と同期</span>
+                <span class="choice-icon">◐</span><span>端末と同期</span>
                 <small>iPhoneなどのライト／ダーク設定と同じにする</small>
               </button>
               <button class="setting-choice" type="button" data-theme-mode="light" role="radio" aria-checked="false">
-                <span class="choice-icon">☀</span>
-                <span>ライト固定</span>
+                <span class="choice-icon">☀</span><span>ライト固定</span>
                 <small>端末設定に関係なく、常に明るい表示</small>
               </button>
               <button class="setting-choice" type="button" data-theme-mode="dark" role="radio" aria-checked="false">
-                <span class="choice-icon">☾</span>
-                <span>ダーク固定</span>
+                <span class="choice-icon">☾</span><span>ダーク固定</span>
                 <small>端末設定に関係なく、常に夜の表示</small>
               </button>
             </div>
@@ -144,69 +142,58 @@
                 <small>童話はランダム、空は表示モードに合わせて固定されます。</small>
               </div>
             </div>
-
             <div class="setting-choice-grid background-choice-grid" role="radiogroup" aria-label="背景">
               <button class="setting-choice" type="button" data-background-mode="fairytale" role="radio" aria-checked="false">
-                <span class="choice-icon">❦</span>
-                <span>童話</span>
+                <span class="choice-icon">❦</span><span>童話</span>
                 <small>9枚からランダム。表示中は5分ごとにゆっくり変化</small>
               </button>
               <button class="setting-choice" type="button" data-background-mode="sky" role="radio" aria-checked="false">
-                <span class="choice-icon">☁</span>
-                <span>空</span>
+                <span class="choice-icon">☁</span><span>空</span>
                 <small>ライトは朝空、ダークは夜空を固定表示</small>
               </button>
             </div>
           </div>
 
+          <div class="settings-divider"></div>
+
+          <div class="settings-group tag-settings-group">
+            <div class="settings-label">
+              <span class="settings-mark">#</span>
+              <div>
+                <strong>タグ</strong>
+                <small>庭と断片で共通して使います。登録画面では上位だけ表示されます。</small>
+              </div>
+            </div>
+
+            <div class="tag-sort-switch" role="radiogroup" aria-label="タグの並び順">
+              <button type="button" data-tag-sort="frequency" role="radio" aria-checked="false">よく使う順</button>
+              <button type="button" data-tag-sort="recent" role="radio" aria-checked="false">最近使った順</button>
+            </div>
+
+            <div class="tag-create-row">
+              <input id="newTagInput" type="text" maxlength="24" placeholder="新しいタグ名" />
+              <button class="soft-button" id="createTagButton" type="button">追加</button>
+            </div>
+
+            <div class="tag-manage-list" id="tagManageList"></div>
+          </div>
+
           <div class="settings-status" id="settingsStatus" aria-live="polite"></div>
         </section>
       </section>
-
-      <section class="view" data-view="cemetery">
-        <section class="cemetery-grid" id="cemeteryGrid"></section>
-        <div class="empty-state hidden" id="cemeteryEmpty">
-          <div class="empty-flower">☾</div>
-          <p>墓地は静かなままです。</p>
-          <small>使わなくなった種も、消さずに眠らせておけます。</small>
-        </div>
-      </section>
-
-      <section class="view" data-view="search">
-        <section class="search-panel">
-          <input id="searchInput" type="search" placeholder="言葉、作品名、メモから探す" autocomplete="off" />
-          <div class="search-filters">
-            <select id="searchCategoryFilter">
-              <option value="all">カテゴリ指定なし</option>
-            </select>
-            <select id="searchStageFilter">
-              <option value="all">成長指定なし</option>
-              <option value="seed">種</option>
-              <option value="sprout">芽</option>
-              <option value="bud">蕾</option>
-              <option value="flower">花</option>
-            </select>
-          </div>
-        </section>
-        <section class="idea-grid" id="searchGrid"></section>
-        <div class="empty-state hidden" id="searchEmpty">
-          <div class="empty-flower">⌕</div>
-          <p>該当する種が見つかりません。</p>
-        </div>
-      </section>
     </main>
 
-    <button class="floating-add" id="openQuickAdd" type="button" aria-label="種を追加する">＋</button>
+    <button class="floating-add" id="openQuickAdd" type="button" aria-label="追加する">＋</button>
 
     <nav class="bottom-nav" aria-label="メインメニュー">
       <button class="nav-item is-active" data-target="garden" type="button">
         <span class="nav-icon">⌂</span><span>庭</span>
       </button>
+      <button class="nav-item" data-target="fragments" type="button">
+        <span class="nav-icon">〃</span><span>断片</span>
+      </button>
       <button class="nav-item" data-target="specimens" type="button">
         <span class="nav-icon">❀</span><span>標本</span>
-      </button>
-      <button class="nav-item" data-target="relations" type="button">
-        <span class="nav-icon">⌘</span><span>相関</span>
       </button>
       <button class="nav-item" data-target="cemetery" type="button">
         <span class="nav-icon">☾</span><span>墓地</span>
@@ -223,10 +210,27 @@
   <div class="modal-backdrop hidden" id="quickAddModal">
     <section class="modal quick-add" role="dialog" aria-modal="true" aria-labelledby="quickAddTitle">
       <button class="modal-close" data-close="quickAddModal" aria-label="閉じる">×</button>
-      <p class="eyebrow">plant a little thought</p>
-      <h2 id="quickAddTitle">何を思いついた？</h2>
+      <p class="eyebrow">plant a thought</p>
+      <h2 id="quickAddTitle">庭へ種を植える</h2>
 
-      <textarea id="quickBody" rows="4" placeholder="一行だけでも大丈夫。"></textarea>
+      <textarea id="quickBody" rows="4" placeholder="育てたいアイデアを書いておく。"></textarea>
+
+      <div class="compact-field">
+        <span class="field-caption">カテゴリ</span>
+        <div class="compact-picker" data-picker="quick">
+          <button class="compact-picker-trigger" id="quickCategoryTrigger" type="button" aria-expanded="false">未分類</button>
+          <div class="compact-picker-menu hidden" id="quickCategoryMenu"></div>
+          <input id="quickCategory" type="hidden" value="未分類" />
+        </div>
+      </div>
+
+      <div class="tag-selector-block">
+        <div class="tag-selector-head">
+          <span>タグ</span>
+          <button class="tag-expand-button" type="button" data-tag-expand="quick">すべて</button>
+        </div>
+        <div class="tag-chip-list" id="quickTagList"></div>
+      </div>
 
       <details class="optional-fields">
         <summary>あとで決めてもいいこと</summary>
@@ -234,19 +238,65 @@
           <label>タイトル
             <input id="quickTitle" type="text" placeholder="空欄でも保存できます" />
           </label>
-          <label>カテゴリ
-            <select id="quickCategory"></select>
-          </label>
           <label>所属作品
             <input id="quickProject" type="text" placeholder="未所属" />
-          </label>
-          <label>雰囲気
-            <select id="quickMood"></select>
           </label>
         </div>
       </details>
 
-      <button class="primary-button full-button" id="saveQuickIdea" type="button">保存する</button>
+      <button class="primary-button full-button" id="saveQuickIdea" type="button">種を植える</button>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="fragmentModal">
+    <section class="modal fragment-modal" role="dialog" aria-modal="true" aria-labelledby="fragmentModalTitle">
+      <button class="modal-close" data-close="fragmentModal" aria-label="閉じる">×</button>
+      <p class="eyebrow">a loose fragment</p>
+      <h2 id="fragmentModalTitle">断片を置く</h2>
+
+      <textarea id="fragmentText" rows="7" placeholder="台詞でも、一言でも、思いついただけの言葉でも。"></textarea>
+
+      <div class="fragment-kind-editor">
+        <span class="field-caption">種類</span>
+        <div class="mini-choice-row" id="fragmentKindChoices"></div>
+      </div>
+
+      <div class="tag-selector-block">
+        <div class="tag-selector-head">
+          <span>タグ</span>
+          <button class="tag-expand-button" type="button" data-tag-expand="fragment">すべて</button>
+        </div>
+        <div class="tag-chip-list" id="fragmentTagList"></div>
+      </div>
+
+      <div class="fragment-modal-actions">
+        <button class="ghost-button hidden" id="deleteFragmentButton" type="button">削除</button>
+        <button class="primary-button" id="saveFragmentButton" type="button">保存</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="transferModal">
+    <section class="modal transfer-modal" role="dialog" aria-modal="true" aria-labelledby="transferTitle">
+      <button class="modal-close" data-close="transferModal" aria-label="閉じる">×</button>
+      <p class="eyebrow">grow this fragment</p>
+      <h2 id="transferTitle">庭へ移す</h2>
+      <p class="transfer-preview" id="transferPreview"></p>
+
+      <label>タイトル
+        <input id="transferIdeaTitle" type="text" placeholder="空欄でも大丈夫" />
+      </label>
+
+      <div class="compact-field">
+        <span class="field-caption">カテゴリ</span>
+        <div class="compact-picker" data-picker="transfer">
+          <button class="compact-picker-trigger" id="transferCategoryTrigger" type="button" aria-expanded="false">未分類</button>
+          <div class="compact-picker-menu hidden" id="transferCategoryMenu"></div>
+          <input id="transferCategory" type="hidden" value="未分類" />
+        </div>
+      </div>
+
+      <button class="primary-button full-button" id="confirmTransferButton" type="button">種として庭へ移す</button>
     </section>
   </div>
 
@@ -271,19 +321,22 @@
           <textarea id="detailBody" rows="5"></textarea>
         </label>
 
-        <div class="two-col">
-          <label>カテゴリ
-            <select id="detailCategory"></select>
-          </label>
+        <div class="two-col detail-basics">
+          <div class="compact-field">
+            <span class="field-caption">カテゴリ</span>
+            <div class="compact-picker" data-picker="detail">
+              <button class="compact-picker-trigger" id="detailCategoryTrigger" type="button" aria-expanded="false">未分類</button>
+              <div class="compact-picker-menu hidden" id="detailCategoryMenu"></div>
+              <input id="detailCategory" type="hidden" value="未分類" />
+            </div>
+          </div>
+
           <label>所属作品
             <input id="detailProject" type="text" placeholder="未所属" />
           </label>
         </div>
 
         <div class="two-col">
-          <label>雰囲気
-            <select id="detailMood"></select>
-          </label>
           <label>状態
             <select id="detailStatus">
               <option value="active">庭</option>
@@ -291,10 +344,27 @@
               <option value="buried">墓地</option>
             </select>
           </label>
+          <div class="detail-tag-summary">
+            <span class="field-caption">タグ</span>
+            <div class="tag-chip-list compact-tags" id="detailTagList"></div>
+            <button class="tag-expand-button inline" type="button" data-tag-expand="detail">タグを選ぶ</button>
+          </div>
         </div>
 
-        <label>肉付けメモ
-          <textarea id="detailMemo" rows="7" placeholder="思いついた断片を足していく場所。"></textarea>
+        <section class="structured-box" id="structuredBox">
+          <div class="structured-head">
+            <div>
+              <small id="structuredEyebrow">category notes</small>
+              <h3 id="structuredTitle">カテゴリ別に整理する</h3>
+            </div>
+            <span class="structured-category-badge" id="structuredCategoryBadge">未分類</span>
+          </div>
+          <p class="structured-description" id="structuredDescription"></p>
+          <div class="structured-fields" id="structuredFields"></div>
+        </section>
+
+        <label>フリースペース
+          <textarea id="detailMemo" rows="9" placeholder="決まっていないこと、ずらずら書きたいこと、分類できないメモは全部ここへ。"></textarea>
         </label>
 
         <section class="growth-box">
@@ -324,7 +394,6 @@
             <select id="relationTarget"></select>
             <button class="soft-button" id="addRelation" type="button">繋げる</button>
           </div>
-          <p class="relation-note">ここで作った繋がりは「相関」画面へ反映されます。派生させた種は矢印で表示されます。</p>
         </section>
 
         <section class="danger-zone">
@@ -340,7 +409,6 @@
   </div>
 
   <div class="toast hidden" id="toast"></div>
-
   <script src="script.js"></script>
 </body>
 </html>
