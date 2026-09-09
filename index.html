@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -10,20 +10,18 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div class="background-stack" aria-hidden="true">
+    <div class="background-layer is-visible" id="bgLayerA"></div>
+    <div class="background-layer" id="bgLayerB"></div>
+    <div class="background-screen"></div>
+  </div>
+
   <div class="app-shell">
-    <div class="version-badge">v0.2</div>
+    <div class="version-badge">v3</div>
 
     <main class="main" id="main">
       <section class="view is-active" data-view="garden">
         <section class="today-card" id="todayCard" aria-live="polite"></section>
-
-        <section class="garden-head">
-          <div>
-            <p class="eyebrow">your little idea garden</p>
-            <h1>庭</h1>
-          </div>
-          <button class="soft-button" id="openQuickAddTop" type="button">種を植える</button>
-        </section>
 
         <section class="filter-row" aria-label="庭の絞り込み">
           <select id="gardenStageFilter" aria-label="成長段階">
@@ -42,17 +40,11 @@
         <div class="empty-state hidden" id="gardenEmpty">
           <div class="empty-flower">✦</div>
           <p>まだ何も植わっていません。</p>
-          <small>思いつきを一行だけ置いてみても大丈夫。</small>
+          <small>右下の＋から、思いつきを一行だけ置いてみても大丈夫。</small>
         </div>
       </section>
 
       <section class="view" data-view="specimens">
-        <section class="page-head">
-          <div>
-            <p class="eyebrow">pressed memories</p>
-            <h1>標本室</h1>
-          </div>
-        </section>
         <section class="idea-grid" id="specimenGrid"></section>
         <div class="empty-state hidden" id="specimenEmpty">
           <div class="empty-flower">❀</div>
@@ -61,13 +53,66 @@
         </div>
       </section>
 
-      <section class="view" data-view="cemetery">
-        <section class="page-head">
-          <div>
-            <p class="eyebrow">quiet place for old ideas</p>
-            <h1>墓地</h1>
+      <section class="view settings-view" data-view="settings">
+        <section class="settings-card">
+          <div class="settings-group">
+            <div class="settings-label">
+              <span class="settings-mark">☼</span>
+              <div>
+                <strong>表示モード</strong>
+                <small>画面全体の明るさと枠の色を切り替えます。</small>
+              </div>
+            </div>
+
+            <div class="setting-choice-grid theme-choice-grid" role="radiogroup" aria-label="表示モード">
+              <button class="setting-choice" type="button" data-theme-mode="system" role="radio" aria-checked="false">
+                <span class="choice-icon">◐</span>
+                <span>端末と同期</span>
+                <small>iPhoneなどのライト／ダーク設定と同じにする</small>
+              </button>
+              <button class="setting-choice" type="button" data-theme-mode="light" role="radio" aria-checked="false">
+                <span class="choice-icon">☀</span>
+                <span>ライト固定</span>
+                <small>端末設定に関係なく、常に明るい表示</small>
+              </button>
+              <button class="setting-choice" type="button" data-theme-mode="dark" role="radio" aria-checked="false">
+                <span class="choice-icon">☾</span>
+                <span>ダーク固定</span>
+                <small>端末設定に関係なく、常に夜の表示</small>
+              </button>
+            </div>
           </div>
+
+          <div class="settings-divider"></div>
+
+          <div class="settings-group">
+            <div class="settings-label">
+              <span class="settings-mark">✦</span>
+              <div>
+                <strong>背景</strong>
+                <small>童話はランダム、空は表示モードに合わせて固定されます。</small>
+              </div>
+            </div>
+
+            <div class="setting-choice-grid background-choice-grid" role="radiogroup" aria-label="背景">
+              <button class="setting-choice" type="button" data-background-mode="fairytale" role="radio" aria-checked="false">
+                <span class="choice-icon">❦</span>
+                <span>童話</span>
+                <small>9枚からランダム。表示中は5分ごとにゆっくり変化</small>
+              </button>
+              <button class="setting-choice" type="button" data-background-mode="sky" role="radio" aria-checked="false">
+                <span class="choice-icon">☁</span>
+                <span>空</span>
+                <small>ライトは朝空、ダークは夜空を固定表示</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-status" id="settingsStatus" aria-live="polite"></div>
         </section>
+      </section>
+
+      <section class="view" data-view="cemetery">
         <section class="cemetery-grid" id="cemeteryGrid"></section>
         <div class="empty-state hidden" id="cemeteryEmpty">
           <div class="empty-flower">☾</div>
@@ -77,12 +122,6 @@
       </section>
 
       <section class="view" data-view="search">
-        <section class="page-head">
-          <div>
-            <p class="eyebrow">find a forgotten thought</p>
-            <h1>検索</h1>
-          </div>
-        </section>
         <section class="search-panel">
           <input id="searchInput" type="search" placeholder="言葉、作品名、メモから探す" autocomplete="off" />
           <div class="search-filters">
@@ -106,6 +145,8 @@
       </section>
     </main>
 
+    <button class="floating-add" id="openQuickAdd" type="button" aria-label="種を追加する">＋</button>
+
     <nav class="bottom-nav" aria-label="メインメニュー">
       <button class="nav-item is-active" data-target="garden" type="button">
         <span class="nav-icon">⌂</span><span>庭</span>
@@ -113,7 +154,9 @@
       <button class="nav-item" data-target="specimens" type="button">
         <span class="nav-icon">❀</span><span>標本</span>
       </button>
-      <button class="nav-add" id="openQuickAdd" type="button" aria-label="種を植える">＋</button>
+      <button class="nav-item" data-target="settings" type="button">
+        <span class="nav-icon">⚙</span><span>設定</span>
+      </button>
       <button class="nav-item" data-target="cemetery" type="button">
         <span class="nav-icon">☾</span><span>墓地</span>
       </button>
@@ -149,7 +192,7 @@
         </div>
       </details>
 
-      <button class="primary-button" id="saveQuickIdea" type="button">種を植える</button>
+      <button class="primary-button full-button" id="saveQuickIdea" type="button">保存する</button>
     </section>
   </div>
 
@@ -237,7 +280,7 @@
       </div>
 
       <footer class="detail-footer">
-        <button class="primary-button" id="saveDetail" type="button">変更を保存</button>
+        <button class="primary-button full-button" id="saveDetail" type="button">変更を保存</button>
       </footer>
     </section>
   </div>

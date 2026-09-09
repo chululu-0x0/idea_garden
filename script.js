@@ -1,6 +1,22 @@
-const APP_VERSION = "0.2";
+const APP_VERSION = "3";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 1;
+const SETTINGS_KEY = "idea_garden_settings_v3";
+const BACKGROUND_INTERVAL_MS = 5 * 60 * 1000;
+const BACKGROUND_FADE_MS = 5000;
+
+const FAIRYTALE_BACKGROUNDS = Array.from({ length: 9 }, (_, index) =>
+  `assets/img/fairytale_${index + 1}.PNG`
+);
+const SKY_BACKGROUNDS = {
+  light: "assets/img/morning_1.PNG",
+  dark: "assets/img/night_1.PNG"
+};
+
+const DEFAULT_SETTINGS = {
+  themeMode: "system",
+  backgroundMode: "fairytale"
+};
 
 const STAGES = [
   { id: "seed", label: "種", icon: "🌰" },
@@ -84,7 +100,7 @@ const GROWTH = {
     bud: ["デザインとして制作に移れる？", "必要な要素が揃っていれば開花。"],
     flower: ["このビジュアルは制作へ持ち込める。", "差分や別案は派生種にしておける。"]
   },
-  "default": {
+  default: {
     seed: ["このアイデアの核は見えてきた？", "「これはつまり何なのか？」に答えられそうなら、芽にしてよさそう。"],
     sprout: ["他の要素とどう繋がるか見えてきた？", "作品の中での役割が見えてきたら、蕾へ。"],
     bud: ["もう実際に作品へ持ち込める？", "考える素材から使える素材になったなら、開花。"],
@@ -97,12 +113,253 @@ let ideas = [];
 let relations = [];
 let currentIdeaId = null;
 let currentView = "garden";
+let uiSettings = loadSettings();
+let resolvedTheme = "light";
+let currentBackgroundPath = "";
+let activeBackgroundLayer = 0;
+let backgroundTransitionTimer = null;
+let rotationTimer = null;
+let rotationRemainingMs = BACKGROUND_INTERVAL_MS;
+let rotationStartedAt = null;
+let lastFairytaleIndex = -1;
 
+const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 function uid(prefix = "id") {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function loadSettings() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+    return {
+      themeMode: ["system", "light", "dark"].includes(parsed?.themeMode)
+        ? parsed.themeMode
+        : DEFAULT_SETTINGS.themeMode,
+      backgroundMode: ["fairytale", "sky"].includes(parsed?.backgroundMode)
+        ? parsed.backgroundMode
+        : DEFAULT_SETTINGS.backgroundMode
+    };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(uiSettings));
+}
+
+function resolveTheme() {
+  if (uiSettings.themeMode === "light") return "light";
+  if (uiSettings.themeMode === "dark") return "dark";
+  return systemThemeQuery.matches ? "dark" : "light";
+}
+
+function applyTheme({ updateBackground = true } = {}) {
+  const nextTheme = resolveTheme();
+  const changed = nextTheme !== resolvedTheme;
+  resolvedTheme = nextTheme;
+
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.dataset.themeMode = uiSettings.themeMode;
+
+  const themeColor = $("meta[name='theme-color']");
+  if (themeColor) {
+    themeColor.setAttribute("content", resolvedTheme === "dark" ? "#101625" : "#efe9d8");
+  }
+
+  renderSettingsControls();
+
+  if (updateBackground && uiSettings.backgroundMode === "sky" && changed) {
+    setBackgroundImage(SKY_BACKGROUNDS[resolvedTheme]);
+  }
+}
+
+function renderSettingsControls() {
+  $$('[data-theme-mode]').forEach((button) => {
+    const selected = button.dataset.themeMode === uiSettings.themeMode;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", String(selected));
+  });
+
+  $$('[data-background-mode]').forEach((button) => {
+    const selected = button.dataset.backgroundMode === uiSettings.backgroundMode;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", String(selected));
+  });
+
+  const status = $("#settingsStatus");
+  if (status) {
+    const themeText = uiSettings.themeMode === "system"
+      ? `端末と同期中（現在は${resolvedTheme === "dark" ? "ダーク" : "ライト"}）`
+      : `${resolvedTheme === "dark" ? "ダーク" : "ライト"}モード固定`;
+    const backgroundText = uiSettings.backgroundMode === "fairytale"
+      ? "童話背景：9枚からランダム、表示中は5分ごとに切替"
+      : `空背景：${resolvedTheme === "dark" ? "night_1.PNG" : "morning_1.PNG"} を固定表示`;
+    status.textContent = `${themeText} ／ ${backgroundText}`;
+  }
+}
+
+function selectThemeMode(mode) {
+  if (!["system", "light", "dark"].includes(mode)) return;
+  uiSettings.themeMode = mode;
+  saveSettings();
+  applyTheme({ updateBackground: true });
+  renderSettingsControls();
+  toast(mode === "system" ? "端末の表示設定と同期します。" : `${mode === "dark" ? "ダーク" : "ライト"}モードに固定しました。`);
+}
+
+function selectBackgroundMode(mode) {
+  if (!["fairytale", "sky"].includes(mode)) return;
+  if (uiSettings.backgroundMode === mode) return;
+
+  uiSettings.backgroundMode = mode;
+  saveSettings();
+  rotationRemainingMs = BACKGROUND_INTERVAL_MS;
+
+  if (mode === "fairytale") {
+    chooseAndShowRandomFairytale({ immediate: false });
+    startBackgroundRotation();
+    toast("童話の背景に切り替えました。");
+  } else {
+    stopBackgroundRotation(true);
+    setBackgroundImage(SKY_BACKGROUNDS[resolvedTheme]);
+    toast("空の背景に切り替えました。");
+  }
+
+  renderSettingsControls();
+}
+
+function preloadImage(path) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(true);
+    image.onerror = () => resolve(false);
+    image.src = path;
+  });
+}
+
+async function setBackgroundImage(path, { immediate = false } = {}) {
+  if (!path || (path === currentBackgroundPath && !immediate)) return;
+
+  const loaded = await preloadImage(path);
+  if (!loaded) {
+    console.warn("背景画像を読み込めませんでした:", path);
+    return;
+  }
+
+  const layers = [$("#bgLayerA"), $("#bgLayerB")];
+  if (!layers[0] || !layers[1]) return;
+
+  clearTimeout(backgroundTransitionTimer);
+
+  if (immediate || !currentBackgroundPath) {
+    layers.forEach((layer, index) => {
+      layer.style.transitionDuration = immediate ? "0s" : "5s";
+      layer.classList.toggle("is-visible", index === activeBackgroundLayer);
+    });
+    layers[activeBackgroundLayer].style.backgroundImage = `url("${path}")`;
+    layers[1 - activeBackgroundLayer].style.backgroundImage = "none";
+    currentBackgroundPath = path;
+    requestAnimationFrame(() => {
+      layers.forEach((layer) => { layer.style.transitionDuration = ""; });
+    });
+    return;
+  }
+
+  const oldIndex = activeBackgroundLayer;
+  const nextIndex = 1 - activeBackgroundLayer;
+  const oldLayer = layers[oldIndex];
+  const nextLayer = layers[nextIndex];
+
+  nextLayer.style.backgroundImage = `url("${path}")`;
+  nextLayer.classList.remove("is-visible");
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      nextLayer.classList.add("is-visible");
+      oldLayer.classList.remove("is-visible");
+      activeBackgroundLayer = nextIndex;
+      currentBackgroundPath = path;
+
+      backgroundTransitionTimer = setTimeout(() => {
+        oldLayer.style.backgroundImage = "none";
+      }, BACKGROUND_FADE_MS + 150);
+    });
+  });
+}
+
+function randomFairytaleIndex() {
+  if (FAIRYTALE_BACKGROUNDS.length <= 1) return 0;
+  let next = Math.floor(Math.random() * FAIRYTALE_BACKGROUNDS.length);
+  while (next === lastFairytaleIndex) {
+    next = Math.floor(Math.random() * FAIRYTALE_BACKGROUNDS.length);
+  }
+  return next;
+}
+
+function chooseAndShowRandomFairytale({ immediate = false } = {}) {
+  const index = randomFairytaleIndex();
+  lastFairytaleIndex = index;
+  return setBackgroundImage(FAIRYTALE_BACKGROUNDS[index], { immediate });
+}
+
+function stopBackgroundRotation(resetRemaining = false) {
+  if (rotationTimer) clearTimeout(rotationTimer);
+  rotationTimer = null;
+  rotationStartedAt = null;
+  if (resetRemaining) rotationRemainingMs = BACKGROUND_INTERVAL_MS;
+}
+
+function pauseBackgroundRotation() {
+  if (!rotationTimer || !rotationStartedAt) return;
+  const elapsed = Date.now() - rotationStartedAt;
+  rotationRemainingMs = Math.max(0, rotationRemainingMs - elapsed);
+  clearTimeout(rotationTimer);
+  rotationTimer = null;
+  rotationStartedAt = null;
+}
+
+function armBackgroundRotation() {
+  if (uiSettings.backgroundMode !== "fairytale" || document.hidden) return;
+  stopBackgroundRotation(false);
+  rotationStartedAt = Date.now();
+  rotationTimer = setTimeout(async () => {
+    rotationTimer = null;
+    rotationStartedAt = null;
+    rotationRemainingMs = BACKGROUND_INTERVAL_MS;
+    await chooseAndShowRandomFairytale();
+    armBackgroundRotation();
+  }, Math.max(250, rotationRemainingMs));
+}
+
+function startBackgroundRotation() {
+  rotationRemainingMs = BACKGROUND_INTERVAL_MS;
+  armBackgroundRotation();
+}
+
+function handleVisibilityChange() {
+  if (uiSettings.backgroundMode !== "fairytale") return;
+  if (document.hidden) {
+    pauseBackgroundRotation();
+  } else {
+    if (rotationRemainingMs <= 0) rotationRemainingMs = 250;
+    armBackgroundRotation();
+  }
+}
+
+async function initializeBackground() {
+  applyTheme({ updateBackground: false });
+
+  if (uiSettings.backgroundMode === "sky") {
+    await setBackgroundImage(SKY_BACKGROUNDS[resolvedTheme], { immediate: true });
+    stopBackgroundRotation(true);
+  } else {
+    await chooseAndShowRandomFairytale({ immediate: true });
+    startBackgroundRotation();
+  }
 }
 
 function openDB() {
@@ -186,7 +443,6 @@ function setupSelects() {
   fillOptions($("#detailMood"), MOODS);
 
   [$("#gardenCategoryFilter"), $("#searchCategoryFilter")].forEach((select) => {
-    const first = select.options[0];
     CATEGORIES.forEach((category) => {
       const option = document.createElement("option");
       option.value = category;
@@ -197,7 +453,7 @@ function setupSelects() {
 }
 
 function stageInfo(id) {
-  return STAGES.find((s) => s.id === id) || STAGES[0];
+  return STAGES.find((stage) => stage.id === id) || STAGES[0];
 }
 
 function formatDate(dateString) {
@@ -223,7 +479,9 @@ function displayTitle(idea) {
 }
 
 function getRelationCount(ideaId) {
-  return relations.filter((r) => r.sourceIdeaId === ideaId || r.targetIdeaId === ideaId).length;
+  return relations.filter((relation) =>
+    relation.sourceIdeaId === ideaId || relation.targetIdeaId === ideaId
+  ).length;
 }
 
 function createIdeaCard(idea) {
@@ -240,7 +498,11 @@ function createIdeaCard(idea) {
     <p>${escapeHTML(idea.body || "まだ本文はありません。")}</p>
     <div class="card-bottom">
       <span class="stage-text">${stage.label}</span>
-      <span class="relation-count">${getRelationCount(idea.id) ? `⌁ ${getRelationCount(idea.id)}` : escapeHTML(idea.project || "未所属")}</span>
+      <span class="relation-count">${
+        getRelationCount(idea.id)
+          ? `⌁ ${getRelationCount(idea.id)}`
+          : escapeHTML(idea.project || "未所属")
+      }</span>
     </div>
   `;
   article.addEventListener("click", () => openDetail(idea.id));
@@ -254,7 +516,9 @@ function createGraveCard(idea) {
   article.innerHTML = `
     <h3>${escapeHTML(displayTitle(idea))}</h3>
     <p>${escapeHTML(idea.body || "")}</p>
-    <span class="grave-date">${idea.buriedAt ? `${formatDate(idea.buriedAt)} 埋葬` : "眠っている種"}</span>
+    <span class="grave-date">${
+      idea.buriedAt ? `${formatDate(idea.buriedAt)} 埋葬` : "眠っている種"
+    }</span>
   `;
   article.addEventListener("click", () => openDetail(idea.id));
   return article;
@@ -349,7 +613,11 @@ function renderTodaySeed() {
     <button type="button" data-id="${idea.id}">
       <div class="today-label">今日の種</div>
       <div class="today-title">${escapeHTML(displayTitle(idea))}</div>
-      <p class="today-note">${escapeHTML(daysAgo(idea.createdAt))}に植えたアイデアです。${getRelationCount(idea.id) ? `今は ${getRelationCount(idea.id)} 個の種と繋がっています。` : "まだ静かに一人で眠っています。"}</p>
+      <p class="today-note">${escapeHTML(daysAgo(idea.createdAt))}に植えたアイデアです。${
+        getRelationCount(idea.id)
+          ? `今は ${getRelationCount(idea.id)} 個の種と繋がっています。`
+          : "まだ静かに一人で眠っています。"
+      }</p>
     </button>
   `;
 
@@ -435,17 +703,23 @@ function renderGrowth(idea) {
   $("#growthHint").textContent = hint;
   $("#stageOrb").textContent = stage.icon;
 
-  const idx = STAGES.findIndex((s) => s.id === idea.stage);
-  $("#stageDown").disabled = idx <= 0;
-  $("#stageUp").disabled = idx >= STAGES.length - 1;
-  $("#stageUp").textContent = idx >= STAGES.length - 1 ? "開花済み" : `${STAGES[idx + 1].label}に育てる`;
+  const index = STAGES.findIndex((item) => item.id === idea.stage);
+  $("#stageDown").disabled = index <= 0;
+  $("#stageUp").disabled = index >= STAGES.length - 1;
+  $("#stageUp").textContent = index >= STAGES.length - 1
+    ? "開花済み"
+    : `${STAGES[index + 1].label}に育てる`;
   renderStageStrip(idea.stage);
 }
 
 function relatedIdeaIds(ideaId) {
   return relations
-    .filter((r) => r.sourceIdeaId === ideaId || r.targetIdeaId === ideaId)
-    .map((r) => r.sourceIdeaId === ideaId ? r.targetIdeaId : r.sourceIdeaId);
+    .filter((relation) =>
+      relation.sourceIdeaId === ideaId || relation.targetIdeaId === ideaId
+    )
+    .map((relation) =>
+      relation.sourceIdeaId === ideaId ? relation.targetIdeaId : relation.sourceIdeaId
+    );
 }
 
 function renderRelations(ideaId) {
@@ -455,7 +729,9 @@ function renderRelations(ideaId) {
   select.innerHTML = "";
 
   const ids = relatedIdeaIds(ideaId);
-  const related = ids.map((id) => ideas.find((idea) => idea.id === id)).filter(Boolean);
+  const related = ids
+    .map((id) => ideas.find((idea) => idea.id === id))
+    .filter(Boolean);
 
   if (!related.length) {
     const empty = document.createElement("div");
@@ -470,15 +746,21 @@ function renderRelations(ideaId) {
         <span>${stageInfo(idea.stage).icon} ${escapeHTML(displayTitle(idea))}</span>
         <button type="button" data-remove-relation="${idea.id}" aria-label="関連を外す">×</button>
       `;
-      row.querySelector("button").addEventListener("click", () => removeRelationBetween(ideaId, idea.id));
+      row.querySelector("button").addEventListener("click", () =>
+        removeRelationBetween(ideaId, idea.id)
+      );
       list.appendChild(row);
     });
   }
 
-  const available = ideas.filter((idea) => idea.id !== ideaId && !ids.includes(idea.id) && idea.status !== "buried");
+  const available = ideas.filter((idea) =>
+    idea.id !== ideaId && !ids.includes(idea.id) && idea.status !== "buried"
+  );
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = available.length ? "繋げたい種を選ぶ" : "繋げられる種がありません";
+  placeholder.textContent = available.length
+    ? "繋げたい種を選ぶ"
+    : "繋げられる種がありません";
   select.appendChild(placeholder);
 
   available.forEach((idea) => {
@@ -541,8 +823,8 @@ async function saveDetail() {
 async function changeStage(direction) {
   const idea = ideas.find((item) => item.id === currentIdeaId);
   if (!idea) return;
-  const idx = STAGES.findIndex((s) => s.id === idea.stage);
-  const next = idx + direction;
+  const index = STAGES.findIndex((stage) => stage.id === idea.stage);
+  const next = index + direction;
   if (next < 0 || next >= STAGES.length) return;
 
   idea.stage = STAGES[next].id;
@@ -552,20 +834,16 @@ async function changeStage(direction) {
   renderAll();
   openDetail(idea.id);
 
-  if (idea.stage === "flower") {
-    toast("花が開きました。");
-  } else {
-    toast(`${stageInfo(idea.stage).label}に育ちました。`);
-  }
+  toast(idea.stage === "flower" ? "花が開きました。" : `${stageInfo(idea.stage).label}に育ちました。`);
 }
 
 async function addRelation() {
   const targetId = $("#relationTarget").value;
   if (!currentIdeaId || !targetId || currentIdeaId === targetId) return;
 
-  const exists = relations.some((r) =>
-    (r.sourceIdeaId === currentIdeaId && r.targetIdeaId === targetId) ||
-    (r.sourceIdeaId === targetId && r.targetIdeaId === currentIdeaId)
+  const exists = relations.some((relation) =>
+    (relation.sourceIdeaId === currentIdeaId && relation.targetIdeaId === targetId) ||
+    (relation.sourceIdeaId === targetId && relation.targetIdeaId === currentIdeaId)
   );
 
   if (exists) {
@@ -588,9 +866,9 @@ async function addRelation() {
 }
 
 async function removeRelationBetween(a, b) {
-  const relation = relations.find((r) =>
-    (r.sourceIdeaId === a && r.targetIdeaId === b) ||
-    (r.sourceIdeaId === b && r.targetIdeaId === a)
+  const relation = relations.find((item) =>
+    (item.sourceIdeaId === a && item.targetIdeaId === b) ||
+    (item.sourceIdeaId === b && item.targetIdeaId === a)
   );
   if (!relation) return;
 
@@ -629,7 +907,7 @@ async function duplicateIdea() {
   await reloadData();
   renderAll();
   openDetail(child.id);
-  toast("花から新しい種を落としました。");
+  toast("ここから新しい種を落としました。");
 }
 
 async function deleteCurrentIdea() {
@@ -639,7 +917,9 @@ async function deleteCurrentIdea() {
   const ok = confirm(`「${displayTitle(idea)}」を完全に削除しますか？\n墓地ではなく、本当に消えます。`);
   if (!ok) return;
 
-  const toDelete = relations.filter((r) => r.sourceIdeaId === idea.id || r.targetIdeaId === idea.id);
+  const toDelete = relations.filter((relation) =>
+    relation.sourceIdeaId === idea.id || relation.targetIdeaId === idea.id
+  );
   for (const relation of toDelete) {
     await remove("relations", relation.id);
   }
@@ -654,12 +934,20 @@ async function deleteCurrentIdea() {
 
 function switchView(target) {
   currentView = target;
-  $$(".view").forEach((view) => view.classList.toggle("is-active", view.dataset.view === target));
-  $$(".nav-item").forEach((item) => item.classList.toggle("is-active", item.dataset.target === target));
+  $$(".view").forEach((view) =>
+    view.classList.toggle("is-active", view.dataset.view === target)
+  );
+  $$(".nav-item").forEach((item) =>
+    item.classList.toggle("is-active", item.dataset.target === target)
+  );
   window.scrollTo({ top: 0, behavior: "smooth" });
 
   if (target === "search") {
     setTimeout(() => $("#searchInput").focus(), 80);
+  }
+
+  if (target === "settings") {
+    renderSettingsControls();
   }
 }
 
@@ -682,7 +970,6 @@ function escapeHTML(value = "") {
 
 function bindEvents() {
   $("#openQuickAdd").addEventListener("click", openQuickAdd);
-  $("#openQuickAddTop").addEventListener("click", openQuickAdd);
   $("#saveQuickIdea").addEventListener("click", saveQuickIdea);
   $("#saveDetail").addEventListener("click", saveDetail);
   $("#stageDown").addEventListener("click", () => changeStage(-1));
@@ -695,7 +982,15 @@ function bindEvents() {
     button.addEventListener("click", () => switchView(button.dataset.target));
   });
 
-  $$("[data-close]").forEach((button) => {
+  $$('[data-theme-mode]').forEach((button) => {
+    button.addEventListener("click", () => selectThemeMode(button.dataset.themeMode));
+  });
+
+  $$('[data-background-mode]').forEach((button) => {
+    button.addEventListener("click", () => selectBackgroundMode(button.dataset.backgroundMode));
+  });
+
+  $$('[data-close]').forEach((button) => {
     button.addEventListener("click", () => closeModal(button.dataset.close));
   });
 
@@ -714,15 +1009,31 @@ function bindEvents() {
   $("#detailCategory").addEventListener("change", () => {
     const idea = ideas.find((item) => item.id === currentIdeaId);
     if (!idea) return;
-    const preview = { ...idea, category: $("#detailCategory").value };
-    renderGrowth(preview);
+    renderGrowth({ ...idea, category: $("#detailCategory").value });
   });
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  const handleSystemThemeChange = () => {
+    if (uiSettings.themeMode !== "system") return;
+    applyTheme({ updateBackground: true });
+  };
+
+  if (typeof systemThemeQuery.addEventListener === "function") {
+    systemThemeQuery.addEventListener("change", handleSystemThemeChange);
+  } else if (typeof systemThemeQuery.addListener === "function") {
+    systemThemeQuery.addListener(handleSystemThemeChange);
+  }
 }
 
 async function init() {
-  document.querySelector(".version-badge").textContent = `v${APP_VERSION}`;
+  const badge = $(".version-badge");
+  if (badge) badge.textContent = `v${APP_VERSION}`;
+
   setupSelects();
   bindEvents();
+  await initializeBackground();
+  renderSettingsControls();
 
   try {
     db = await openDB();
