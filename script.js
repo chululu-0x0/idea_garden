@@ -1,6 +1,7 @@
-const APP_VERSION = "3";
+const APP_VERSION = "4";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 1;
+/* Keep the v3 settings key so the user's existing theme/background choices survive the update. */
 const SETTINGS_KEY = "idea_garden_settings_v3";
 const BACKGROUND_INTERVAL_MS = 5 * 60 * 1000;
 const BACKGROUND_FADE_MS = 5000;
@@ -108,11 +109,17 @@ const GROWTH = {
   }
 };
 
+const GRAPH_NODE_W = 154;
+const GRAPH_NODE_H = 76;
+const GRAPH_MIN_SCALE = 0.28;
+const GRAPH_MAX_SCALE = 2.4;
+
 let db;
 let ideas = [];
 let relations = [];
 let currentIdeaId = null;
 let currentView = "garden";
+
 let uiSettings = loadSettings();
 let resolvedTheme = "light";
 let currentBackgroundPath = "";
@@ -123,6 +130,15 @@ let rotationRemainingMs = BACKGROUND_INTERVAL_MS;
 let rotationStartedAt = null;
 let lastFairytaleIndex = -1;
 
+let graphMode = "focus";
+let graphFocusId = null;
+let graphLayout = { nodes: [], edges: [] };
+let graphTransform = { x: 0, y: 0, scale: 1 };
+let graphPointers = new Map();
+let graphPanState = null;
+let graphPinchState = null;
+let graphFitPending = false;
+
 const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -130,6 +146,8 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 function uid(prefix = "id") {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
+
+/* ---------- Theme / background ---------- */
 
 function loadSettings() {
   try {
@@ -178,13 +196,13 @@ function applyTheme({ updateBackground = true } = {}) {
 }
 
 function renderSettingsControls() {
-  $$('[data-theme-mode]').forEach((button) => {
+  $$("[data-theme-mode]").forEach((button) => {
     const selected = button.dataset.themeMode === uiSettings.themeMode;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-checked", String(selected));
   });
 
-  $$('[data-background-mode]').forEach((button) => {
+  $$("[data-background-mode]").forEach((button) => {
     const selected = button.dataset.backgroundMode === uiSettings.backgroundMode;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-checked", String(selected));
@@ -208,7 +226,10 @@ function selectThemeMode(mode) {
   saveSettings();
   applyTheme({ updateBackground: true });
   renderSettingsControls();
-  toast(mode === "system" ? "端末の表示設定と同期します。" : `${mode === "dark" ? "ダーク" : "ライト"}モードに固定しました。`);
+  toast(mode === "system"
+    ? "端末の表示設定と同期します。"
+    : `${mode === "dark" ? "ダーク" : "ライト"}モードに固定しました。`
+  );
 }
 
 function selectBackgroundMode(mode) {
@@ -228,7 +249,6 @@ function selectBackgroundMode(mode) {
     setBackgroundImage(SKY_BACKGROUNDS[resolvedTheme]);
     toast("空の背景に切り替えました。");
   }
-
   renderSettingsControls();
 }
 
@@ -243,7 +263,6 @@ function preloadImage(path) {
 
 async function setBackgroundImage(path, { immediate = false } = {}) {
   if (!path || (path === currentBackgroundPath && !immediate)) return;
-
   const loaded = await preloadImage(path);
   if (!loaded) {
     console.warn("背景画像を読み込めませんでした:", path);
@@ -252,7 +271,6 @@ async function setBackgroundImage(path, { immediate = false } = {}) {
 
   const layers = [$("#bgLayerA"), $("#bgLayerB")];
   if (!layers[0] || !layers[1]) return;
-
   clearTimeout(backgroundTransitionTimer);
 
   if (immediate || !currentBackgroundPath) {
@@ -283,7 +301,6 @@ async function setBackgroundImage(path, { immediate = false } = {}) {
       oldLayer.classList.remove("is-visible");
       activeBackgroundLayer = nextIndex;
       currentBackgroundPath = path;
-
       backgroundTransitionTimer = setTimeout(() => {
         oldLayer.style.backgroundImage = "none";
       }, BACKGROUND_FADE_MS + 150);
@@ -352,7 +369,6 @@ function handleVisibilityChange() {
 
 async function initializeBackground() {
   applyTheme({ updateBackground: false });
-
   if (uiSettings.backgroundMode === "sky") {
     await setBackgroundImage(SKY_BACKGROUNDS[resolvedTheme], { immediate: true });
     stopBackgroundRotation(true);
@@ -362,20 +378,20 @@ async function initializeBackground() {
   }
 }
 
+/* ---------- IndexedDB ---------- */
+
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
 
     req.onupgradeneeded = (event) => {
       const database = event.target.result;
-
       if (!database.objectStoreNames.contains("ideas")) {
         const store = database.createObjectStore("ideas", { keyPath: "id" });
         store.createIndex("updatedAt", "updatedAt");
         store.createIndex("status", "status");
         store.createIndex("category", "category");
       }
-
       if (!database.objectStoreNames.contains("relations")) {
         const relationStore = database.createObjectStore("relations", { keyPath: "id" });
         relationStore.createIndex("sourceIdeaId", "sourceIdeaId");
@@ -419,11 +435,14 @@ async function reloadData() {
   ideas = await getAll("ideas");
   relations = await getAll("relations");
   sortIdeas();
+  ensureGraphFocus();
 }
 
 function sortIdeas() {
   ideas.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 }
+
+/* ---------- Common render helpers ---------- */
 
 function fillOptions(select, values, selected = null) {
   select.innerHTML = "";
@@ -531,7 +550,6 @@ function renderGarden() {
 
   const stage = $("#gardenStageFilter").value;
   const category = $("#gardenCategoryFilter").value;
-
   const list = ideas.filter((idea) => {
     if (idea.status !== "active") return false;
     if (stage !== "all" && idea.stage !== stage) return false;
@@ -567,7 +585,6 @@ function renderSearch() {
   const q = $("#searchInput").value.trim().toLowerCase();
   const category = $("#searchCategoryFilter").value;
   const stage = $("#searchStageFilter").value;
-
   grid.innerHTML = "";
 
   const list = ideas.filter((idea) => {
@@ -620,7 +637,6 @@ function renderTodaySeed() {
       }</p>
     </button>
   `;
-
   card.querySelector("button").addEventListener("click", () => openDetail(idea.id));
 }
 
@@ -630,7 +646,618 @@ function renderAll() {
   renderCemetery();
   renderSearch();
   renderTodaySeed();
+  renderGraphControls();
+  if (currentView === "relations") {
+    renderRelationGraph({ fit: false });
+  }
 }
+
+/* ---------- Correlation graph ---------- */
+
+function ensureGraphFocus() {
+  if (graphFocusId && ideas.some((idea) => idea.id === graphFocusId)) return;
+  if (!ideas.length) {
+    graphFocusId = null;
+    return;
+  }
+
+  const ranked = [...ideas].sort((a, b) => {
+    const relationDiff = getRelationCount(b.id) - getRelationCount(a.id);
+    if (relationDiff) return relationDiff;
+    return new Date(b.updatedAt) - new Date(a.updatedAt);
+  });
+  graphFocusId = ranked[0].id;
+}
+
+function renderGraphControls() {
+  const focusButton = $("#graphFocusMode");
+  const allButton = $("#graphAllMode");
+  if (!focusButton || !allButton) return;
+
+  focusButton.classList.toggle("is-selected", graphMode === "focus");
+  allButton.classList.toggle("is-selected", graphMode === "all");
+  focusButton.setAttribute("aria-checked", String(graphMode === "focus"));
+  allButton.setAttribute("aria-checked", String(graphMode === "all"));
+
+  const pickerWrap = $("#graphFocusPickerWrap");
+  if (pickerWrap) pickerWrap.classList.toggle("hidden", graphMode === "all");
+
+  const select = $("#graphFocusSelect");
+  if (!select) return;
+  const previous = graphFocusId;
+  select.innerHTML = "";
+
+  if (!ideas.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "種がありません";
+    select.appendChild(option);
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  [...ideas]
+    .sort((a, b) => displayTitle(a).localeCompare(displayTitle(b), "ja"))
+    .forEach((idea) => {
+      const option = document.createElement("option");
+      option.value = idea.id;
+      option.textContent = `${stageInfo(idea.stage).icon} ${displayTitle(idea)}`;
+      select.appendChild(option);
+    });
+
+  if (ideas.some((idea) => idea.id === previous)) select.value = previous;
+}
+
+function getRelationBetween(a, b) {
+  return relations.find((relation) =>
+    (relation.sourceIdeaId === a && relation.targetIdeaId === b) ||
+    (relation.sourceIdeaId === b && relation.targetIdeaId === a)
+  );
+}
+
+function buildFocusGraph() {
+  ensureGraphFocus();
+  const center = ideas.find((idea) => idea.id === graphFocusId);
+  if (!center) return { nodes: [], edges: [] };
+
+  const connectedRelations = relations.filter((relation) =>
+    relation.sourceIdeaId === center.id || relation.targetIdeaId === center.id
+  );
+
+  const neighborIds = [...new Set(connectedRelations.map((relation) =>
+    relation.sourceIdeaId === center.id ? relation.targetIdeaId : relation.sourceIdeaId
+  ))];
+
+  const neighbors = neighborIds
+    .map((id) => ideas.find((idea) => idea.id === id))
+    .filter(Boolean);
+
+  const nodes = [{
+    ...center,
+    graphX: 0,
+    graphY: 0,
+    isCenter: true
+  }];
+
+  /*
+   * Direct connections are distributed over multiple rings.
+   * This keeps large hubs readable instead of squeezing every node onto one circle.
+   */
+  let cursor = 0;
+  let ringIndex = 0;
+  while (cursor < neighbors.length) {
+    const capacity = 8 + ringIndex * 4;
+    const ringItems = neighbors.slice(cursor, cursor + capacity);
+    const radius = 235 + ringIndex * 185;
+    const angleOffset = ringIndex % 2 ? Math.PI / Math.max(6, ringItems.length) : 0;
+
+    ringItems.forEach((idea, index) => {
+      const angle = -Math.PI / 2 + angleOffset +
+        (Math.PI * 2 * index / Math.max(1, ringItems.length));
+      nodes.push({
+        ...idea,
+        graphX: Math.cos(angle) * radius,
+        graphY: Math.sin(angle) * radius,
+        isCenter: false
+      });
+    });
+
+    cursor += ringItems.length;
+    ringIndex += 1;
+  }
+
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  /* Also draw any relationship that exists between the visible neighboring nodes. */
+  const edges = relations.filter((relation) =>
+    nodeIds.has(relation.sourceIdeaId) && nodeIds.has(relation.targetIdeaId)
+  );
+
+  return { nodes, edges };
+}
+
+function seededUnit(id) {
+  let hash = 2166136261;
+  for (const ch of String(id)) {
+    hash ^= ch.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) % 100000) / 100000;
+}
+
+function buildFullGraph() {
+  if (!ideas.length) return { nodes: [], edges: [] };
+
+  const nodes = ideas.map((idea, index) => {
+    const angle = seededUnit(idea.id) * Math.PI * 2;
+    const ring = 170 + Math.sqrt(index + 1) * 72;
+    return {
+      ...idea,
+      graphX: Math.cos(angle) * ring,
+      graphY: Math.sin(angle) * ring,
+      vx: 0,
+      vy: 0,
+      isCenter: false
+    };
+  });
+
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const edges = relations.filter((relation) =>
+    nodeMap.has(relation.sourceIdeaId) && nodeMap.has(relation.targetIdeaId)
+  );
+
+  const count = nodes.length;
+  const iterations = count <= 70 ? 180 : count <= 150 ? 105 : 62;
+  const repulsion = count <= 90 ? 42000 : 30000;
+  const springLength = count <= 90 ? 205 : 175;
+  const springStrength = .0047;
+  const gravity = .003;
+  const damping = .78;
+
+  for (let tick = 0; tick < iterations; tick += 1) {
+    for (const node of nodes) {
+      node.vx *= damping;
+      node.vy *= damping;
+      node.vx += -node.graphX * gravity;
+      node.vy += -node.graphY * gravity;
+    }
+
+    for (let i = 0; i < count; i += 1) {
+      const a = nodes[i];
+      for (let j = i + 1; j < count; j += 1) {
+        const b = nodes[j];
+        let dx = b.graphX - a.graphX;
+        let dy = b.graphY - a.graphY;
+        let dist2 = dx * dx + dy * dy;
+        if (dist2 < 250) {
+          dx += (seededUnit(a.id + b.id) - .5) * 12;
+          dy += (seededUnit(b.id + a.id) - .5) * 12;
+          dist2 = dx * dx + dy * dy;
+        }
+        const dist = Math.sqrt(dist2) || 1;
+        const force = repulsion / Math.max(900, dist2);
+        const fx = dx / dist * force;
+        const fy = dy / dist * force;
+        a.vx -= fx;
+        a.vy -= fy;
+        b.vx += fx;
+        b.vy += fy;
+      }
+    }
+
+    for (const edge of edges) {
+      const source = nodeMap.get(edge.sourceIdeaId);
+      const target = nodeMap.get(edge.targetIdeaId);
+      if (!source || !target) continue;
+      const dx = target.graphX - source.graphX;
+      const dy = target.graphY - source.graphY;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const force = (dist - springLength) * springStrength;
+      const fx = dx / dist * force;
+      const fy = dy / dist * force;
+      source.vx += fx;
+      source.vy += fy;
+      target.vx -= fx;
+      target.vy -= fy;
+    }
+
+    for (const node of nodes) {
+      node.graphX += Math.max(-12, Math.min(12, node.vx));
+      node.graphY += Math.max(-12, Math.min(12, node.vy));
+    }
+  }
+
+  /* Put isolated ideas around the outer edge so they remain visible but do not crowd clusters. */
+  const degree = new Map(nodes.map((node) => [node.id, 0]));
+  edges.forEach((edge) => {
+    degree.set(edge.sourceIdeaId, (degree.get(edge.sourceIdeaId) || 0) + 1);
+    degree.set(edge.targetIdeaId, (degree.get(edge.targetIdeaId) || 0) + 1);
+  });
+
+  const isolated = nodes.filter((node) => degree.get(node.id) === 0);
+  if (isolated.length) {
+    const connected = nodes.filter((node) => degree.get(node.id) > 0);
+    const maxRadius = Math.max(
+      380,
+      ...connected.map((node) => Math.hypot(node.graphX, node.graphY) + 210)
+    );
+    isolated.forEach((node, index) => {
+      const angle = (Math.PI * 2 * index / isolated.length) - Math.PI / 2;
+      node.graphX = Math.cos(angle) * maxRadius;
+      node.graphY = Math.sin(angle) * maxRadius;
+    });
+  }
+
+  return { nodes, edges };
+}
+
+function graphBounds(layout = graphLayout) {
+  if (!layout.nodes.length) return { minX: -100, minY: -100, maxX: 100, maxY: 100 };
+  const halfW = GRAPH_NODE_W / 2;
+  const halfH = GRAPH_NODE_H / 2;
+  return {
+    minX: Math.min(...layout.nodes.map((node) => node.graphX - halfW)),
+    minY: Math.min(...layout.nodes.map((node) => node.graphY - halfH)),
+    maxX: Math.max(...layout.nodes.map((node) => node.graphX + halfW)),
+    maxY: Math.max(...layout.nodes.map((node) => node.graphY + halfH))
+  };
+}
+
+function shortenEdge(source, target) {
+  const dx = target.graphX - source.graphX;
+  const dy = target.graphY - source.graphY;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const cut = 82;
+  return {
+    x1: source.graphX + ux * cut,
+    y1: source.graphY + uy * cut * .55,
+    x2: target.graphX - ux * cut,
+    y2: target.graphY - uy * cut * .55
+  };
+}
+
+function svgEl(name, attrs = {}) {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+  Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, String(value)));
+  return element;
+}
+
+function splitGraphTitle(text, maxChars = 11) {
+  const value = String(text || "");
+  if (value.length <= maxChars) return [value];
+  const first = value.slice(0, maxChars);
+  const rest = value.slice(maxChars, maxChars * 2);
+  return [first, rest ? (value.length > maxChars * 2 ? `${rest.slice(0, maxChars - 1)}…` : rest) : ""].filter(Boolean);
+}
+
+function createGraphNode(node) {
+  const group = svgEl("g", {
+    class: `graph-node${node.isCenter ? " is-center" : ""}${node.status === "buried" ? " is-buried" : ""}`,
+    transform: `translate(${node.graphX} ${node.graphY})`,
+    "data-id": node.id,
+    "data-stage": node.stage || "seed",
+    tabindex: "0",
+    role: "button",
+    "aria-label": `${displayTitle(node)}。${stageInfo(node.stage).label}。${node.category || "未分類"}`
+  });
+
+  const rect = svgEl("rect", {
+    class: "node-card",
+    x: -GRAPH_NODE_W / 2,
+    y: -GRAPH_NODE_H / 2,
+    width: GRAPH_NODE_W,
+    height: GRAPH_NODE_H,
+    rx: node.isCenter ? 18 : 14,
+    ry: node.isCenter ? 18 : 14
+  });
+  group.appendChild(rect);
+
+  const icon = svgEl("text", {
+    class: "node-icon",
+    x: -GRAPH_NODE_W / 2 + 13,
+    y: -GRAPH_NODE_H / 2 + 24
+  });
+  icon.textContent = stageInfo(node.stage).icon;
+  group.appendChild(icon);
+
+  const titleLines = splitGraphTitle(displayTitle(node));
+  titleLines.forEach((line, index) => {
+    const text = svgEl("text", {
+      class: "node-title",
+      x: -GRAPH_NODE_W / 2 + 41,
+      y: -GRAPH_NODE_H / 2 + 20 + index * 14
+    });
+    text.textContent = line;
+    group.appendChild(text);
+  });
+
+  const meta = svgEl("text", {
+    class: "node-meta",
+    x: -GRAPH_NODE_W / 2 + 13,
+    y: GRAPH_NODE_H / 2 - 12
+  });
+  meta.textContent = `${node.category || "未分類"} ・ ${node.project || "未所属"}`;
+  group.appendChild(meta);
+
+  if (node.status !== "active") {
+    const badge = svgEl("rect", {
+      class: "node-badge",
+      x: GRAPH_NODE_W / 2 - 47,
+      y: GRAPH_NODE_H / 2 - 27,
+      width: 37,
+      height: 16,
+      rx: 8
+    });
+    group.appendChild(badge);
+
+    const statusText = svgEl("text", {
+      class: "node-status",
+      x: GRAPH_NODE_W / 2 - 28.5,
+      y: GRAPH_NODE_H / 2 - 16,
+      "text-anchor": "middle"
+    });
+    statusText.textContent = node.status === "buried" ? "墓地" : "標本";
+    group.appendChild(statusText);
+  }
+
+  const activate = () => {
+    if (graphMode === "focus" && node.id === graphFocusId) {
+      openDetail(node.id);
+      return;
+    }
+    graphFocusId = node.id;
+    graphMode = "focus";
+    renderGraphControls();
+    renderRelationGraph({ fit: true });
+  };
+
+  group.addEventListener("click", (event) => {
+    event.stopPropagation();
+    activate();
+  });
+  group.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      activate();
+    }
+  });
+  group.addEventListener("pointerdown", (event) => event.stopPropagation());
+
+  return group;
+}
+
+function renderRelationGraph({ fit = false } = {}) {
+  const svg = $("#relationGraph");
+  const nodesGroup = $("#graphNodes");
+  const edgesGroup = $("#graphEdges");
+  const empty = $("#graphEmpty");
+  const caption = $("#graphCaption");
+  if (!svg || !nodesGroup || !edgesGroup || !empty || !caption) return;
+
+  ensureGraphFocus();
+  renderGraphControls();
+
+  graphLayout = graphMode === "focus" ? buildFocusGraph() : buildFullGraph();
+  nodesGroup.innerHTML = "";
+  edgesGroup.innerHTML = "";
+
+  if (!graphLayout.nodes.length) {
+    empty.classList.remove("hidden");
+    caption.textContent = "種を追加すると、ここに思考の繋がりが現れます。";
+    return;
+  }
+
+  empty.classList.add("hidden");
+  const nodeMap = new Map(graphLayout.nodes.map((node) => [node.id, node]));
+
+  graphLayout.edges.forEach((edge) => {
+    const source = nodeMap.get(edge.sourceIdeaId);
+    const target = nodeMap.get(edge.targetIdeaId);
+    if (!source || !target) return;
+    const p = shortenEdge(source, target);
+    const line = svgEl("line", {
+      class: `graph-edge${edge.relationType === "derived" ? " is-derived" : ""}`,
+      x1: p.x1,
+      y1: p.y1,
+      x2: p.x2,
+      y2: p.y2
+    });
+    edgesGroup.appendChild(line);
+  });
+
+  graphLayout.nodes.forEach((node) => nodesGroup.appendChild(createGraphNode(node)));
+
+  if (graphMode === "focus") {
+    const focus = ideas.find((idea) => idea.id === graphFocusId);
+    const relationCount = focus ? getRelationCount(focus.id) : 0;
+    caption.textContent = focus
+      ? `「${displayTitle(focus)}」を中心に、直接繋がっている ${relationCount} 件を表示中。周囲の種を押すと、その種へ中心が移ります。中心の種をもう一度押すと詳細を開きます。`
+      : "";
+  } else {
+    const isolatedCount = graphLayout.nodes.filter((node) => getRelationCount(node.id) === 0).length;
+    caption.textContent = `全 ${graphLayout.nodes.length} 件・繋がり ${graphLayout.edges.length} 本を表示中。関連のない種も外側に表示します。種を押すと、その種を中心にした表示へ移ります。${isolatedCount ? ` 未接続は ${isolatedCount} 件。` : ""}`;
+  }
+
+  requestAnimationFrame(() => {
+    updateGraphTransform();
+    if (fit || graphFitPending) {
+      graphFitPending = false;
+      fitGraphToViewport();
+    }
+  });
+}
+
+function graphViewportSize() {
+  const svg = $("#relationGraph");
+  const rect = svg?.getBoundingClientRect();
+  return {
+    width: Math.max(1, rect?.width || 1),
+    height: Math.max(1, rect?.height || 1)
+  };
+}
+
+function clampGraphScale(value) {
+  return Math.max(GRAPH_MIN_SCALE, Math.min(GRAPH_MAX_SCALE, value));
+}
+
+function updateGraphTransform() {
+  const world = $("#graphWorld");
+  if (!world) return;
+  world.setAttribute(
+    "transform",
+    `translate(${graphTransform.x} ${graphTransform.y}) scale(${graphTransform.scale})`
+  );
+}
+
+function fitGraphToViewport() {
+  if (!graphLayout.nodes.length) return;
+  const { width, height } = graphViewportSize();
+  const bounds = graphBounds();
+  const graphW = Math.max(1, bounds.maxX - bounds.minX);
+  const graphH = Math.max(1, bounds.maxY - bounds.minY);
+  const padding = graphMode === "focus" ? 52 : 72;
+  const scale = clampGraphScale(Math.min(
+    (width - padding * 2) / graphW,
+    (height - padding * 2) / graphH,
+    graphMode === "focus" ? 1.15 : .96
+  ));
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  graphTransform = {
+    scale,
+    x: width / 2 - cx * scale,
+    y: height / 2 - cy * scale
+  };
+  updateGraphTransform();
+}
+
+function zoomGraphAt(factor, clientX = null, clientY = null) {
+  const svg = $("#relationGraph");
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+  const pointX = clientX == null ? rect.left + rect.width / 2 : clientX;
+  const pointY = clientY == null ? rect.top + rect.height / 2 : clientY;
+  const localX = pointX - rect.left;
+  const localY = pointY - rect.top;
+
+  const oldScale = graphTransform.scale;
+  const newScale = clampGraphScale(oldScale * factor);
+  if (Math.abs(newScale - oldScale) < .0001) return;
+
+  const worldX = (localX - graphTransform.x) / oldScale;
+  const worldY = (localY - graphTransform.y) / oldScale;
+  graphTransform.scale = newScale;
+  graphTransform.x = localX - worldX * newScale;
+  graphTransform.y = localY - worldY * newScale;
+  updateGraphTransform();
+}
+
+function graphPointerDown(event) {
+  const svg = $("#relationGraph");
+  if (!svg) return;
+  graphPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  svg.setPointerCapture?.(event.pointerId);
+
+  if (graphPointers.size === 1) {
+    graphPanState = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: graphTransform.x,
+      originY: graphTransform.y
+    };
+    svg.classList.add("is-panning");
+  } else if (graphPointers.size === 2) {
+    const points = [...graphPointers.values()];
+    const dx = points[1].x - points[0].x;
+    const dy = points[1].y - points[0].y;
+    graphPinchState = {
+      distance: Math.hypot(dx, dy) || 1,
+      scale: graphTransform.scale,
+      midpointX: (points[0].x + points[1].x) / 2,
+      midpointY: (points[0].y + points[1].y) / 2
+    };
+    graphPanState = null;
+  }
+}
+
+function graphPointerMove(event) {
+  if (!graphPointers.has(event.pointerId)) return;
+  graphPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+  if (graphPointers.size >= 2) {
+    const points = [...graphPointers.values()].slice(0, 2);
+    const dx = points[1].x - points[0].x;
+    const dy = points[1].y - points[0].y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const midpointX = (points[0].x + points[1].x) / 2;
+    const midpointY = (points[0].y + points[1].y) / 2;
+
+    if (!graphPinchState) {
+      graphPinchState = {
+        distance,
+        scale: graphTransform.scale,
+        midpointX,
+        midpointY
+      };
+      return;
+    }
+
+    const targetScale = clampGraphScale(
+      graphPinchState.scale * (distance / graphPinchState.distance)
+    );
+    const svg = $("#relationGraph");
+    const rect = svg.getBoundingClientRect();
+    const localX = midpointX - rect.left;
+    const localY = midpointY - rect.top;
+    const oldScale = graphTransform.scale;
+    const worldX = (localX - graphTransform.x) / oldScale;
+    const worldY = (localY - graphTransform.y) / oldScale;
+    graphTransform.scale = targetScale;
+    graphTransform.x = localX - worldX * targetScale;
+    graphTransform.y = localY - worldY * targetScale;
+    updateGraphTransform();
+    return;
+  }
+
+  if (graphPanState && graphPanState.pointerId === event.pointerId) {
+    graphTransform.x = graphPanState.originX + (event.clientX - graphPanState.startX);
+    graphTransform.y = graphPanState.originY + (event.clientY - graphPanState.startY);
+    updateGraphTransform();
+  }
+}
+
+function graphPointerEnd(event) {
+  graphPointers.delete(event.pointerId);
+  const svg = $("#relationGraph");
+  svg?.releasePointerCapture?.(event.pointerId);
+
+  if (graphPointers.size < 2) graphPinchState = null;
+  if (graphPointers.size === 1) {
+    const [remainingId, point] = [...graphPointers.entries()][0];
+    graphPanState = {
+      pointerId: remainingId,
+      startX: point.x,
+      startY: point.y,
+      originX: graphTransform.x,
+      originY: graphTransform.y
+    };
+  } else if (graphPointers.size === 0) {
+    graphPanState = null;
+    svg?.classList.remove("is-panning");
+  }
+}
+
+function switchGraphMode(mode) {
+  if (!["focus", "all"].includes(mode) || graphMode === mode) return;
+  graphMode = mode;
+  renderGraphControls();
+  renderRelationGraph({ fit: true });
+}
+
+/* ---------- Quick add / detail ---------- */
 
 function openQuickAdd() {
   $("#quickAddModal").classList.remove("hidden");
@@ -676,6 +1303,7 @@ async function saveQuickIdea() {
 
   await put("ideas", idea);
   await reloadData();
+  graphFocusId = idea.id;
   renderAll();
   resetQuickAdd();
   closeModal("quickAddModal");
@@ -740,10 +1368,14 @@ function renderRelations(ideaId) {
     list.appendChild(empty);
   } else {
     related.forEach((idea) => {
+      const relation = getRelationBetween(ideaId, idea.id);
       const row = document.createElement("div");
       row.className = "relation-item";
+      const prefix = relation?.relationType === "derived"
+        ? (relation.sourceIdeaId === ideaId ? "→" : "←")
+        : "⌁";
       row.innerHTML = `
-        <span>${stageInfo(idea.stage).icon} ${escapeHTML(displayTitle(idea))}</span>
+        <span>${prefix} ${stageInfo(idea.stage).icon} ${escapeHTML(displayTitle(idea))}</span>
         <button type="button" data-remove-relation="${idea.id}" aria-label="関連を外す">×</button>
       `;
       row.querySelector("button").addEventListener("click", () =>
@@ -775,6 +1407,7 @@ function openDetail(ideaId) {
   const idea = ideas.find((item) => item.id === ideaId);
   if (!idea) return;
   currentIdeaId = ideaId;
+  graphFocusId = ideaId;
 
   $("#detailHeading").textContent = displayTitle(idea);
   $("#detailMeta").textContent = `${formatDate(idea.createdAt)} ・ ${idea.project || "未所属"}`;
@@ -797,7 +1430,6 @@ async function saveDetail() {
 
   const oldStatus = idea.status;
   const newStatus = $("#detailStatus").value;
-
   idea.title = $("#detailTitle").value.trim();
   idea.body = $("#detailBody").value.trim();
   idea.category = $("#detailCategory").value;
@@ -833,8 +1465,10 @@ async function changeStage(direction) {
   await reloadData();
   renderAll();
   openDetail(idea.id);
-
-  toast(idea.stage === "flower" ? "花が開きました。" : `${stageInfo(idea.stage).label}に育ちました。`);
+  toast(idea.stage === "flower"
+    ? "花が開きました。"
+    : `${stageInfo(idea.stage).label}に育ちました。`
+  );
 }
 
 async function addRelation() {
@@ -905,6 +1539,7 @@ async function duplicateIdea() {
   });
 
   await reloadData();
+  graphFocusId = child.id;
   renderAll();
   openDetail(child.id);
   toast("ここから新しい種を落としました。");
@@ -926,11 +1561,14 @@ async function deleteCurrentIdea() {
 
   await remove("ideas", idea.id);
   currentIdeaId = null;
+  if (graphFocusId === idea.id) graphFocusId = null;
   await reloadData();
   renderAll();
   closeModal("detailModal");
   toast("種を完全に削除しました。");
 }
+
+/* ---------- Navigation / events ---------- */
 
 function switchView(target) {
   currentView = target;
@@ -940,14 +1578,18 @@ function switchView(target) {
   $$(".nav-item").forEach((item) =>
     item.classList.toggle("is-active", item.dataset.target === target)
   );
+
   window.scrollTo({ top: 0, behavior: "smooth" });
 
   if (target === "search") {
     setTimeout(() => $("#searchInput").focus(), 80);
   }
-
   if (target === "settings") {
     renderSettingsControls();
+  }
+  if (target === "relations") {
+    graphFitPending = true;
+    renderRelationGraph({ fit: true });
   }
 }
 
@@ -982,15 +1624,15 @@ function bindEvents() {
     button.addEventListener("click", () => switchView(button.dataset.target));
   });
 
-  $$('[data-theme-mode]').forEach((button) => {
+  $$("[data-theme-mode]").forEach((button) => {
     button.addEventListener("click", () => selectThemeMode(button.dataset.themeMode));
   });
 
-  $$('[data-background-mode]').forEach((button) => {
+  $$("[data-background-mode]").forEach((button) => {
     button.addEventListener("click", () => selectBackgroundMode(button.dataset.backgroundMode));
   });
 
-  $$('[data-close]').forEach((button) => {
+  $$("[data-close]").forEach((button) => {
     button.addEventListener("click", () => closeModal(button.dataset.close));
   });
 
@@ -1012,6 +1654,30 @@ function bindEvents() {
     renderGrowth({ ...idea, category: $("#detailCategory").value });
   });
 
+  $("#graphFocusMode").addEventListener("click", () => switchGraphMode("focus"));
+  $("#graphAllMode").addEventListener("click", () => switchGraphMode("all"));
+  $("#graphFocusSelect").addEventListener("change", (event) => {
+    if (!event.target.value) return;
+    graphFocusId = event.target.value;
+    graphMode = "focus";
+    renderGraphControls();
+    renderRelationGraph({ fit: true });
+  });
+
+  $("#graphZoomIn").addEventListener("click", () => zoomGraphAt(1.25));
+  $("#graphZoomOut").addEventListener("click", () => zoomGraphAt(0.8));
+  $("#graphFit").addEventListener("click", fitGraphToViewport);
+
+  const graph = $("#relationGraph");
+  graph.addEventListener("pointerdown", graphPointerDown);
+  graph.addEventListener("pointermove", graphPointerMove);
+  graph.addEventListener("pointerup", graphPointerEnd);
+  graph.addEventListener("pointercancel", graphPointerEnd);
+  graph.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    zoomGraphAt(event.deltaY < 0 ? 1.12 : 0.89, event.clientX, event.clientY);
+  }, { passive: false });
+
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   const handleSystemThemeChange = () => {
@@ -1024,6 +1690,10 @@ function bindEvents() {
   } else if (typeof systemThemeQuery.addListener === "function") {
     systemThemeQuery.addListener(handleSystemThemeChange);
   }
+
+  window.addEventListener("resize", () => {
+    if (currentView === "relations") fitGraphToViewport();
+  });
 }
 
 async function init() {

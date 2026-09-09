@@ -17,7 +17,7 @@
   </div>
 
   <div class="app-shell">
-    <div class="version-badge">v3</div>
+    <div class="version-badge">v4</div>
 
     <main class="main" id="main">
       <section class="view is-active" data-view="garden">
@@ -51,6 +51,57 @@
           <p>まだ標本はありません。</p>
           <small>作品に使った花を、ここへ残せます。</small>
         </div>
+      </section>
+
+      <section class="view relations-view" data-view="relations">
+        <section class="graph-toolbar">
+          <div class="graph-mode-switch" role="radiogroup" aria-label="相関図の表示方法">
+            <button class="graph-mode-button is-selected" id="graphFocusMode" type="button" role="radio" aria-checked="true">中心から辿る</button>
+            <button class="graph-mode-button" id="graphAllMode" type="button" role="radio" aria-checked="false">全体を見る</button>
+          </div>
+
+          <div class="graph-focus-picker" id="graphFocusPickerWrap">
+            <label for="graphFocusSelect">中心の種</label>
+            <select id="graphFocusSelect" aria-label="中心に表示する種"></select>
+          </div>
+        </section>
+
+        <section class="graph-legend" aria-label="相関図の凡例">
+          <span>🌰 種</span>
+          <span>🌱 芽</span>
+          <span>🌿 蕾</span>
+          <span>🌸 花</span>
+          <span class="legend-line"><i></i>関連</span>
+          <span class="legend-line legend-derived"><i></i>派生</span>
+        </section>
+
+        <section class="graph-shell">
+          <div class="graph-floating-controls" aria-label="相関図の表示操作">
+            <button id="graphZoomIn" type="button" aria-label="拡大">＋</button>
+            <button id="graphZoomOut" type="button" aria-label="縮小">−</button>
+            <button id="graphFit" type="button" aria-label="全体を収める">⌗</button>
+          </div>
+
+          <svg id="relationGraph" class="relation-graph" aria-label="アイデア相関図" role="img">
+            <defs>
+              <marker id="arrowRelated" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" class="graph-arrow"></path>
+              </marker>
+            </defs>
+            <g id="graphWorld">
+              <g id="graphEdges"></g>
+              <g id="graphNodes"></g>
+            </g>
+          </svg>
+
+          <div class="graph-empty hidden" id="graphEmpty">
+            <div>⌁</div>
+            <p>まだ相関図に表示できる種がありません。</p>
+            <small>種を追加して、詳細画面から他の種と繋げるとここに現れます。</small>
+          </div>
+        </section>
+
+        <section class="graph-caption" id="graphCaption" aria-live="polite"></section>
       </section>
 
       <section class="view settings-view" data-view="settings">
@@ -154,14 +205,17 @@
       <button class="nav-item" data-target="specimens" type="button">
         <span class="nav-icon">❀</span><span>標本</span>
       </button>
-      <button class="nav-item" data-target="settings" type="button">
-        <span class="nav-icon">⚙</span><span>設定</span>
+      <button class="nav-item" data-target="relations" type="button">
+        <span class="nav-icon">⌘</span><span>相関</span>
       </button>
       <button class="nav-item" data-target="cemetery" type="button">
         <span class="nav-icon">☾</span><span>墓地</span>
       </button>
       <button class="nav-item" data-target="search" type="button">
         <span class="nav-icon">⌕</span><span>検索</span>
+      </button>
+      <button class="nav-item" data-target="settings" type="button">
+        <span class="nav-icon">⚙</span><span>設定</span>
       </button>
     </nav>
   </div>
@@ -270,7 +324,7 @@
             <select id="relationTarget"></select>
             <button class="soft-button" id="addRelation" type="button">繋げる</button>
           </div>
-          <p class="relation-note">※ 全体相関図は後のバージョン用。今は繋がりだけ保存します。</p>
+          <p class="relation-note">ここで作った繋がりは「相関」画面へ反映されます。派生させた種は矢印で表示されます。</p>
         </section>
 
         <section class="danger-zone">
