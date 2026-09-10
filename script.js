@@ -1,4 +1,4 @@
-const APP_VERSION = "5";
+const APP_VERSION = "6";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -15,8 +15,8 @@ const SKY_BACKGROUNDS = {
 
 const DEFAULT_SETTINGS = {
   themeMode: "system",
-  backgroundMode: "fairytale",
-  tagSort: "frequency"
+  tagSort: "frequency",
+  accent: "rose"
 };
 
 const STAGES = [
@@ -230,7 +230,7 @@ let tags = [];
 let currentIdeaId = null;
 let currentFragmentId = null;
 let transferFragmentId = null;
-let currentView = "garden";
+let currentView = "timeline";
 let fragmentKindFilter = "すべて";
 let fragmentSelectedKind = "未分類";
 
@@ -793,7 +793,7 @@ async function createTag() {
 async function deleteTag(tagId) {
   const tag = tagById(tagId);
   if (!tag) return;
-  const ok = confirm(`タグ「${tag.name}」を削除しますか？\n庭や断片からもこのタグだけ外れます。`);
+  const ok = confirm(`タグ「${tag.name}」を削除しますか？\n庭やポストからもこのタグだけ外れます。`);
   if (!ok) return;
 
   for (const idea of ideas) {
@@ -1181,7 +1181,7 @@ function renderTodaySeed() {
     card.innerHTML = `
       <div class="today-label">今日の種</div>
       <div class="today-title">まだ庭は空っぽです。</div>
-      <p class="today-note">断片の中から育てたくなったものを、庭へ移してみてもいい。</p>
+      <p class="today-note">タイムラインから育てたくなったものを、庭へ送ってみてもいい。</p>
     `;
     return;
   }
@@ -1789,4 +1789,964 @@ async function init() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+
+
+/* =========================================================
+   v6: personal creative SNS layer
+   The old v5 fragment store is intentionally reused as posts.
+   ========================================================= */
+
+const ACCOUNT_KEY = "idea_garden_accounts_v6";
+const ACTIVE_ACCOUNT_KEY = "idea_garden_active_account_v6";
+const ACCENTS = ["rose", "mint", "blue", "violet", "amber", "coral"];
+
+let accounts = loadAccounts();
+let activeAccountId = loadActiveAccountId();
+let timelineFilter = "all";
+let threadPostId = null;
+let quoteTargetId = null;
+let draftFromInline = false;
+
+function loadSettings() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+    return {
+      themeMode: ["system", "light", "dark"].includes(parsed?.themeMode)
+        ? parsed.themeMode : DEFAULT_SETTINGS.themeMode,
+      tagSort: ["frequency", "recent"].includes(parsed?.tagSort)
+        ? parsed.tagSort : DEFAULT_SETTINGS.tagSort,
+      accent: ["rose", "mint", "blue", "violet", "amber", "coral"].includes(parsed?.accent) ? parsed.accent : DEFAULT_SETTINGS.accent
+    };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function loadAccounts() {
+  const fallback = [{ id: "account_main", name: "メイン", handle: "main", avatar: "✦" }];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ACCOUNT_KEY) || "null");
+    if (!Array.isArray(parsed) || !parsed.length) return fallback;
+    const cleaned = parsed
+      .filter((item) => item && item.id && item.name)
+      .map((item) => ({
+        id: String(item.id),
+        name: String(item.name).slice(0, 24),
+        handle: sanitizeHandle(item.handle || item.name),
+        avatar: String(item.avatar || "✦").slice(0, 4)
+      }));
+    return cleaned.length ? cleaned : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveAccounts() {
+  localStorage.setItem(ACCOUNT_KEY, JSON.stringify(accounts));
+}
+
+function loadActiveAccountId() {
+  const stored = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+  return accounts.some((account) => account.id === stored) ? stored : accounts[0].id;
+}
+
+function saveActiveAccountId() {
+  localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeAccountId);
+}
+
+function sanitizeHandle(value = "") {
+  const cleaned = String(value)
+    .trim()
+    .replace(/^@+/, "")
+    .replace(/\s+/g, "_")
+    .replace(/[^0-9A-Za-z_ぁ-んァ-ン一-龯ー]/g, "")
+    .slice(0, 24);
+  return cleaned || "memo";
+}
+
+function accountById(id) {
+  return accounts.find((account) => account.id === id) || accounts[0];
+}
+
+function activeAccount() {
+  return accountById(activeAccountId);
+}
+
+function resolveTheme() {
+  if (uiSettings.themeMode === "light") return "light";
+  if (uiSettings.themeMode === "dark") return "dark";
+  return systemThemeQuery.matches ? "dark" : "light";
+}
+
+function applyTheme() {
+  resolvedTheme = resolveTheme();
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.dataset.themeMode = uiSettings.themeMode;
+  document.documentElement.dataset.accent = uiSettings.accent || "rose";
+  const themeColor = $("meta[name='theme-color']");
+  if (themeColor) {
+    themeColor.setAttribute("content", resolvedTheme === "dark" ? "#101114" : "#ffffff");
+  }
+  renderSettingsControls();
+}
+
+function renderSettingsControls() {
+  $$('[data-theme-mode]').forEach((button) => {
+    const selected = button.dataset.themeMode === uiSettings.themeMode;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", String(selected));
+  });
+  $$('[data-tag-sort]').forEach((button) => {
+    const selected = button.dataset.tagSort === uiSettings.tagSort;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", String(selected));
+  });
+  $$('[data-accent]').forEach((button) => {
+    const selected = button.dataset.accent === uiSettings.accent;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", String(selected));
+  });
+
+  const status = $("#settingsStatus");
+  if (status) {
+    const themeText = uiSettings.themeMode === "system"
+      ? `端末と同期中・現在は${resolvedTheme === "dark" ? "ダーク" : "ライト"}`
+      : `${resolvedTheme === "dark" ? "ダーク" : "ライト"}固定`;
+    const account = activeAccount();
+    status.textContent = `${themeText} ／ 投稿アカウント：${account.name}`;
+  }
+}
+
+function selectThemeMode(mode) {
+  if (!["system", "light", "dark"].includes(mode)) return;
+  uiSettings.themeMode = mode;
+  saveSettings();
+  applyTheme();
+  toast(mode === "system" ? "端末の表示設定と同期します。" : `${mode === "dark" ? "ダーク" : "ライト"}表示に固定しました。`);
+}
+
+function selectAccent(accent) {
+  if (!ACCENTS.includes(accent)) return;
+  uiSettings.accent = accent;
+  saveSettings();
+  applyTheme();
+}
+
+async function migratePostsV6() {
+  let changed = false;
+  const fallbackId = accounts[0].id;
+  for (const post of fragments) {
+    let dirty = false;
+    if (!accounts.some((account) => account.id === post.accountId)) {
+      post.accountId = fallbackId;
+      dirty = true;
+    }
+    if (!Object.prototype.hasOwnProperty.call(post, "parentId")) { post.parentId = null; dirty = true; }
+    if (!Object.prototype.hasOwnProperty.call(post, "quoteId")) { post.quoteId = null; dirty = true; }
+    if (!Object.prototype.hasOwnProperty.call(post, "liked")) { post.liked = false; dirty = true; }
+    if (!Object.prototype.hasOwnProperty.call(post, "picked")) { post.picked = false; dirty = true; }
+    if (!Object.prototype.hasOwnProperty.call(post, "bookmarked")) { post.bookmarked = false; dirty = true; }
+    if (!Object.prototype.hasOwnProperty.call(post, "gardenIdeaId")) { post.gardenIdeaId = null; dirty = true; }
+    if (dirty) {
+      await put("fragments", post);
+      changed = true;
+    }
+  }
+  if (changed) await reloadData();
+}
+
+function formatPostTime(dateString) {
+  const date = new Date(dateString || 0);
+  const diff = Date.now() - date.getTime();
+  if (!Number.isFinite(diff) || diff < 0) return "今";
+  const minute = 60000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diff < minute) return "今";
+  if (diff < hour) return `${Math.floor(diff / minute)}分`;
+  if (diff < day) return `${Math.floor(diff / hour)}時間`;
+  if (diff < 7 * day) return `${Math.floor(diff / day)}日`;
+  return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(date);
+}
+
+function topLevelPostId(post) {
+  return post?.parentId || post?.id || null;
+}
+
+function replyCount(postId) {
+  return fragments.filter((post) => post.parentId === postId).length;
+}
+
+function quotePostById(id) {
+  return fragments.find((post) => post.id === id) || null;
+}
+
+function postGardenIdea(post) {
+  return post?.gardenIdeaId ? ideas.find((idea) => idea.id === post.gardenIdeaId) : null;
+}
+
+function renderQuoteBlock(post) {
+  if (!post?.quoteId) return "";
+  const quoted = quotePostById(post.quoteId);
+  if (!quoted) return `<div class="quoted-post unavailable">引用元のポストは削除されています。</div>`;
+  const account = accountById(quoted.accountId);
+  return `
+    <div class="quoted-post" data-quote-open="${quoted.id}">
+      <div class="quoted-head"><span>${escapeHTML(account.avatar)}</span><strong>${escapeHTML(account.name)}</strong><small>@${escapeHTML(account.handle)}</small></div>
+      <p>${escapeHTML(quoted.text || "")}</p>
+    </div>
+  `;
+}
+
+function createPostCard(post, { compact = false, thread = false } = {}) {
+  const article = document.createElement("article");
+  article.className = `post-card${compact ? " is-compact" : ""}${thread ? " is-thread" : ""}${post.parentId ? " is-reply" : ""}`;
+  article.dataset.id = post.id;
+  const account = accountById(post.accountId);
+  const names = tagNames(post.tags || []);
+  const replies = replyCount(post.id);
+  const inGarden = Boolean(postGardenIdea(post));
+
+  article.innerHTML = `
+    <div class="post-avatar-col">
+      <span class="account-avatar">${escapeHTML(account.avatar)}</span>
+      ${post.parentId ? '<span class="reply-thread-line"></span>' : ''}
+    </div>
+    <div class="post-main">
+      <header class="post-head">
+        <div class="post-author-line">
+          <strong>${escapeHTML(account.name)}</strong>
+          <span>@${escapeHTML(account.handle)}</span>
+          <span>·</span>
+          <span>${escapeHTML(formatPostTime(post.createdAt))}</span>
+        </div>
+        ${compact ? "" : `<button class="post-more" type="button" aria-label="ポストを編集">•••</button>`}
+      </header>
+      ${post.parentId ? '<div class="reply-label">返信</div>' : ''}
+      <p class="post-text">${escapeHTML(post.text || "")}</p>
+      ${renderQuoteBlock(post)}
+      ${names.length ? `<div class="post-tags">${names.slice(0, compact ? 2 : 5).map((name) => `<span>#${escapeHTML(name)}</span>`).join("")}</div>` : ""}
+      ${inGarden ? '<div class="post-garden-mark">🌱 庭へ送信済み</div>' : ""}
+      ${compact ? "" : `
+        <div class="post-actions" aria-label="ポスト操作">
+          <button class="post-action reply-action" type="button" aria-label="返信"><span>○</span><small>${replies || ""}</small></button>
+          <button class="post-action like-action${post.liked ? " is-active" : ""}" type="button" aria-label="好き"><span>♡</span></button>
+          <button class="post-action pick-action${post.picked ? " is-active" : ""}" type="button" aria-label="拾う"><span>♧</span><small>${post.picked ? "拾った" : ""}</small></button>
+          <button class="post-action bookmark-action${post.bookmarked ? " is-active" : ""}" type="button" aria-label="保存"><span>⌑</span></button>
+        </div>
+      `}
+    </div>
+  `;
+
+  const open = () => openThread(topLevelPostId(post), { focusReply: false });
+  article.querySelector(".post-text")?.addEventListener("click", open);
+  article.querySelector(".post-head")?.addEventListener("click", (event) => {
+    if (!event.target.closest("button")) open();
+  });
+  article.querySelector(".post-avatar-col")?.addEventListener("click", open);
+  article.querySelector(".post-more")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openFragmentModal(post.id);
+  });
+  article.querySelector(".reply-action")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openThread(topLevelPostId(post), { focusReply: true });
+  });
+  article.querySelector(".like-action")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    togglePostFlag(post.id, "liked");
+  });
+  article.querySelector(".pick-action")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    togglePostFlag(post.id, "picked");
+  });
+  article.querySelector(".bookmark-action")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    togglePostFlag(post.id, "bookmarked");
+  });
+  article.querySelectorAll("[data-quote-open]").forEach((block) => {
+    block.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const quoted = quotePostById(block.dataset.quoteOpen);
+      if (quoted) openThread(topLevelPostId(quoted), { focusReply: false });
+    });
+  });
+  return article;
+}
+
+async function togglePostFlag(postId, field) {
+  const post = fragments.find((item) => item.id === postId);
+  if (!post || !["liked", "picked", "bookmarked"].includes(field)) return;
+  post[field] = !post[field];
+  post.updatedAt = new Date().toISOString();
+  await put("fragments", post);
+  await reloadData();
+  renderAll();
+  if (threadPostId && !$("#threadModal").classList.contains("hidden")) renderThread();
+}
+
+function renderTimelineProfile() {
+  const account = activeAccount();
+  $("#activeAccountAvatar").textContent = account.avatar;
+  $("#activeAccountName").textContent = account.name;
+  $("#activeAccountHandle").textContent = `@${account.handle}`;
+  $("#composerAvatar").textContent = account.avatar;
+  $("#replyAvatar").textContent = account.avatar;
+}
+
+function renderTimelineTabs() {
+  $$('[data-timeline-filter]').forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.timelineFilter === timelineFilter);
+  });
+}
+
+function renderTimeline() {
+  const list = $("#timelineList");
+  const empty = $("#timelineEmpty");
+  if (!list || !empty) return;
+  list.innerHTML = "";
+  let posts = fragments.filter((post) => !post.parentId);
+
+  if (timelineFilter === "account") {
+    posts = posts.filter((post) => post.accountId === activeAccountId);
+  } else if (timelineFilter === "picked") {
+    posts = fragments.filter((post) => post.picked);
+  } else if (timelineFilter === "bookmarked") {
+    posts = fragments.filter((post) => post.bookmarked);
+  }
+
+  posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  posts.forEach((post) => list.appendChild(createPostCard(post)));
+  empty.classList.toggle("hidden", posts.length > 0);
+  renderTimelineProfile();
+  renderTimelineTabs();
+}
+
+function renderPickedShelf() {
+  const shelf = $("#pickedShelf");
+  const container = $("#pickedPostList");
+  if (!shelf || !container) return;
+  const picked = fragments
+    .filter((post) => post.picked && !postGardenIdea(post))
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+  $("#pickedCount").textContent = String(picked.length);
+  shelf.classList.toggle("hidden", picked.length === 0);
+  container.innerHTML = "";
+
+  picked.forEach((post) => {
+    const account = accountById(post.accountId);
+    const row = document.createElement("div");
+    row.className = "picked-post-row";
+    row.innerHTML = `
+      <span class="account-avatar tiny">${escapeHTML(account.avatar)}</span>
+      <button class="picked-post-text" type="button">${escapeHTML(post.text || "")}</button>
+      <button class="picked-to-garden" type="button">種にする</button>
+      <button class="picked-dismiss" type="button" aria-label="拾った印を外す">×</button>
+    `;
+    row.querySelector(".picked-post-text").addEventListener("click", () => openThread(topLevelPostId(post)));
+    row.querySelector(".picked-to-garden").addEventListener("click", () => openTransferModal(post.id));
+    row.querySelector(".picked-dismiss").addEventListener("click", () => togglePostFlag(post.id, "picked"));
+    container.appendChild(row);
+  });
+}
+
+function renderSearch() {
+  const query = $("#searchInput").value.trim().toLowerCase();
+  const category = $("#searchCategoryFilter").value;
+  const stage = $("#searchStageFilter").value;
+  const ideaGrid = $("#searchGrid");
+  const postList = $("#searchFragmentList");
+  ideaGrid.innerHTML = "";
+  postList.innerHTML = "";
+
+  const ideaResults = ideas.filter((idea) => {
+    const haystack = [
+      idea.title, idea.body, idea.memo, idea.project, idea.category,
+      ...tagNames(idea.tags), ...flattenDetailValues(idea.details || {})
+    ].join(" ").toLowerCase();
+    if (query && !haystack.includes(query)) return false;
+    if (category !== "all" && idea.category !== category) return false;
+    if (stage !== "all" && idea.stage !== stage) return false;
+    return true;
+  });
+
+  const postResults = fragments.filter((post) => {
+    const account = accountById(post.accountId);
+    const haystack = [post.text, post.kind, account.name, account.handle, ...tagNames(post.tags)].join(" ").toLowerCase();
+    return !query || haystack.includes(query);
+  });
+
+  postResults.forEach((post) => postList.appendChild(createPostCard(post, { compact: true })));
+  ideaResults.forEach((idea) => ideaGrid.appendChild(createIdeaCard(idea)));
+  $("#searchFragmentEmpty").classList.toggle("hidden", postResults.length > 0);
+  $("#searchIdeaEmpty").classList.toggle("hidden", ideaResults.length > 0);
+}
+
+function renderAll() {
+  computeTagStats();
+  renderTimeline();
+  renderGarden();
+  renderPickedShelf();
+  renderSpecimens();
+  renderCemetery();
+  renderSearch();
+  renderTodaySeed();
+  renderTagManageList();
+  renderAllTagSelectors();
+  renderAccountSwitchList();
+  renderAccountManageList();
+}
+
+async function submitTimelinePost() {
+  const input = $("#timelineComposer");
+  const text = input.value.trim();
+  if (!text) return;
+  const now = new Date().toISOString();
+  await put("fragments", {
+    id: uid("post"),
+    text,
+    kind: "未分類",
+    tags: [],
+    accountId: activeAccountId,
+    parentId: null,
+    quoteId: null,
+    liked: false,
+    picked: false,
+    bookmarked: false,
+    gardenIdeaId: null,
+    createdAt: now,
+    updatedAt: now
+  });
+  input.value = "";
+  input.style.height = "";
+  await reloadData();
+  renderAll();
+}
+
+function populatePostAccountSelect(selectedId = activeAccountId) {
+  const select = $("#postAccountSelect");
+  if (!select) return;
+  select.innerHTML = "";
+  accounts.forEach((account) => {
+    const option = document.createElement("option");
+    option.value = account.id;
+    option.textContent = `${account.avatar} ${account.name}  @${account.handle}`;
+    select.appendChild(option);
+  });
+  select.value = accounts.some((account) => account.id === selectedId) ? selectedId : activeAccountId;
+  const account = accountById(select.value);
+  $("#postEditorAvatar").textContent = account.avatar;
+}
+
+function renderPostQuotePreview() {
+  const preview = $("#quotePreview");
+  if (!preview) return;
+  const quoted = quotePostById(quoteTargetId);
+  preview.classList.toggle("hidden", !quoted);
+  if (!quoted) {
+    preview.innerHTML = "";
+    return;
+  }
+  const account = accountById(quoted.accountId);
+  preview.innerHTML = `<small>引用</small><strong>${escapeHTML(account.name)} <span>@${escapeHTML(account.handle)}</span></strong><p>${escapeHTML(quoted.text || "")}</p>`;
+}
+
+function openFragmentModal(fragmentId = null, options = {}) {
+  currentFragmentId = fragmentId;
+  const post = fragments.find((item) => item.id === fragmentId);
+  quoteTargetId = options.quoteId || post?.quoteId || null;
+  draftFromInline = Boolean(options.fromInline);
+  fragmentSelectedKind = post?.kind || "未分類";
+  fragmentSelectedTags = new Set(post?.tags || []);
+  tagExpanded.fragment = false;
+
+  $("#fragmentModalTitle").textContent = post ? "ポストを編集" : (quoteTargetId ? "引用してポスト" : "ポストする");
+  $("#fragmentText").value = post?.text || (options.prefill ?? "");
+  $("#saveFragmentButton").textContent = post ? "保存" : "ポスト";
+  $("#deleteFragmentButton").classList.toggle("hidden", !post);
+  populatePostAccountSelect(post?.accountId || activeAccountId);
+  renderFragmentKindChoices();
+  renderTagSelector("fragment");
+  renderPostQuotePreview();
+  $("#fragmentModal").classList.remove("hidden");
+  setTimeout(() => $("#fragmentText").focus(), 40);
+}
+
+async function saveFragment() {
+  const text = $("#fragmentText").value.trim();
+  if (!text && !quoteTargetId) {
+    toast("一言だけでも書いておけます。");
+    return;
+  }
+  const now = new Date().toISOString();
+  const existing = fragments.find((item) => item.id === currentFragmentId);
+  const accountId = $("#postAccountSelect").value || activeAccountId;
+  const post = existing ? {
+    ...existing,
+    text,
+    kind: fragmentSelectedKind,
+    tags: [...fragmentSelectedTags],
+    accountId,
+    quoteId: quoteTargetId,
+    updatedAt: now
+  } : {
+    id: uid("post"),
+    text,
+    kind: fragmentSelectedKind,
+    tags: [...fragmentSelectedTags],
+    accountId,
+    parentId: null,
+    quoteId: quoteTargetId,
+    liked: false,
+    picked: false,
+    bookmarked: false,
+    gardenIdeaId: null,
+    createdAt: now,
+    updatedAt: now
+  };
+  await put("fragments", post);
+  if (!existing && draftFromInline) {
+    $("#timelineComposer").value = "";
+    $("#timelineComposer").style.height = "";
+  }
+  currentFragmentId = null;
+  quoteTargetId = null;
+  draftFromInline = false;
+  await reloadData();
+  renderAll();
+  closeModal("fragmentModal");
+  if (threadPostId && !$("#threadModal").classList.contains("hidden")) renderThread();
+  toast(existing ? "ポストを更新しました。" : "ポストしました。");
+}
+
+async function deleteCurrentFragment() {
+  const post = fragments.find((item) => item.id === currentFragmentId);
+  if (!post) return;
+  const ok = confirm("このポストを削除しますか？");
+  if (!ok) return;
+  const rootId = post.id;
+  const children = fragments.filter((item) => item.parentId === rootId);
+  for (const child of children) await remove("fragments", child.id);
+  await remove("fragments", rootId);
+  currentFragmentId = null;
+  if (threadPostId === rootId) threadPostId = null;
+  await reloadData();
+  renderAll();
+  closeModal("fragmentModal");
+  closeModal("threadModal");
+  toast("ポストを削除しました。");
+}
+
+function openThread(postId, { focusReply = false } = {}) {
+  const root = fragments.find((post) => post.id === postId);
+  if (!root) return;
+  threadPostId = root.id;
+  renderThread();
+  $("#threadModal").classList.remove("hidden");
+  if (focusReply) setTimeout(() => $("#replyText").focus(), 50);
+}
+
+function renderThread() {
+  const root = fragments.find((post) => post.id === threadPostId);
+  if (!root) {
+    closeModal("threadModal");
+    return;
+  }
+  const rootWrap = $("#threadRoot");
+  const repliesWrap = $("#threadReplies");
+  rootWrap.innerHTML = "";
+  repliesWrap.innerHTML = "";
+  rootWrap.appendChild(createPostCard(root, { thread: true }));
+  fragments
+    .filter((post) => post.parentId === root.id)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .forEach((reply) => repliesWrap.appendChild(createPostCard(reply, { thread: true })));
+
+  const gardenIdea = postGardenIdea(root);
+  $("#threadGardenButton").textContent = gardenIdea ? "庭で開く" : "庭へ送る";
+  $("#replyAvatar").textContent = activeAccount().avatar;
+}
+
+async function submitReply() {
+  const root = fragments.find((post) => post.id === threadPostId);
+  const input = $("#replyText");
+  const text = input.value.trim();
+  if (!root || !text) return;
+  const now = new Date().toISOString();
+  await put("fragments", {
+    id: uid("reply"),
+    text,
+    kind: "未分類",
+    tags: [],
+    accountId: activeAccountId,
+    parentId: root.id,
+    quoteId: null,
+    liked: false,
+    picked: false,
+    bookmarked: false,
+    gardenIdeaId: null,
+    createdAt: now,
+    updatedAt: now
+  });
+  input.value = "";
+  input.style.height = "";
+  await reloadData();
+  renderAll();
+  renderThread();
+}
+
+function quoteCurrentThreadPost() {
+  const root = fragments.find((post) => post.id === threadPostId);
+  if (!root) return;
+  closeModal("threadModal");
+  openFragmentModal(null, { quoteId: root.id });
+}
+
+function editCurrentThreadPost() {
+  const root = fragments.find((post) => post.id === threadPostId);
+  if (!root) return;
+  closeModal("threadModal");
+  openFragmentModal(root.id);
+}
+
+function openCurrentThreadGarden() {
+  const root = fragments.find((post) => post.id === threadPostId);
+  if (!root) return;
+  const idea = postGardenIdea(root);
+  if (idea) {
+    closeModal("threadModal");
+    switchView("garden");
+    setTimeout(() => openDetail(idea.id), 50);
+  } else {
+    openTransferModal(root.id);
+  }
+}
+
+function openTransferModal(fragmentId) {
+  const post = fragments.find((item) => item.id === fragmentId);
+  if (!post) return;
+  const existingIdea = postGardenIdea(post);
+  if (existingIdea) {
+    switchView("garden");
+    closeModal("threadModal");
+    setTimeout(() => openDetail(existingIdea.id), 40);
+    return;
+  }
+  transferFragmentId = fragmentId;
+  $("#transferPreview").textContent = post.text;
+  $("#transferIdeaTitle").value = "";
+  setCategoryPicker("transfer", suggestedCategoryForFragment(post));
+  closeModal("fragmentModal");
+  $("#transferModal").classList.remove("hidden");
+}
+
+async function confirmTransfer() {
+  const post = fragments.find((item) => item.id === transferFragmentId);
+  if (!post) return;
+  const now = new Date().toISOString();
+  const idea = {
+    id: uid("idea"),
+    title: $("#transferIdeaTitle").value.trim(),
+    body: post.text,
+    category: $("#transferCategory").value,
+    stage: "seed",
+    project: "",
+    memo: "",
+    details: {},
+    tags: [...(post.tags || [])],
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+    buriedAt: null,
+    sourcePostId: post.id
+  };
+  await put("ideas", idea);
+  post.gardenIdeaId = idea.id;
+  post.picked = false;
+  post.updatedAt = now;
+  await put("fragments", post);
+  transferFragmentId = null;
+  await reloadData();
+  renderAll();
+  closeModal("transferModal");
+  closeModal("threadModal");
+  switchView("garden");
+  setTimeout(() => openDetail(idea.id), 60);
+  toast("ポストから種を作りました。");
+}
+
+function renderAccountSwitchList() {
+  const list = $("#accountSwitchList");
+  if (!list) return;
+  list.innerHTML = "";
+  accounts.forEach((account) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `account-switch-row${account.id === activeAccountId ? " is-active" : ""}`;
+    button.innerHTML = `
+      <span class="account-avatar">${escapeHTML(account.avatar)}</span>
+      <span><strong>${escapeHTML(account.name)}</strong><small>@${escapeHTML(account.handle)}</small></span>
+      <i>${account.id === activeAccountId ? "✓" : ""}</i>
+    `;
+    button.addEventListener("click", () => setActiveAccount(account.id));
+    list.appendChild(button);
+  });
+}
+
+function renderAccountManageList() {
+  const list = $("#accountManageList");
+  if (!list) return;
+  list.innerHTML = "";
+  accounts.forEach((account) => {
+    const count = fragments.filter((post) => post.accountId === account.id).length;
+    const row = document.createElement("div");
+    row.className = "account-manage-row";
+    row.innerHTML = `
+      <button class="account-manage-main" type="button">
+        <span class="account-avatar tiny">${escapeHTML(account.avatar)}</span>
+        <span><strong>${escapeHTML(account.name)}</strong><small>@${escapeHTML(account.handle)} ・ ${count}件</small></span>
+      </button>
+      <button class="account-delete" type="button" aria-label="アカウントを削除">×</button>
+    `;
+    row.querySelector(".account-manage-main").addEventListener("click", () => setActiveAccount(account.id, { close: false }));
+    row.querySelector(".account-delete").addEventListener("click", () => deleteAccount(account.id));
+    list.appendChild(row);
+  });
+}
+
+function openAccountModal() {
+  renderAccountSwitchList();
+  $("#accountModal").classList.remove("hidden");
+}
+
+function setActiveAccount(accountId, { close = true } = {}) {
+  if (!accounts.some((account) => account.id === accountId)) return;
+  activeAccountId = accountId;
+  saveActiveAccountId();
+  renderTimelineProfile();
+  renderTimeline();
+  renderAccountSwitchList();
+  renderAccountManageList();
+  renderSettingsControls();
+  populatePostAccountSelect(accountId);
+  if (close) closeModal("accountModal");
+}
+
+async function createAccount() {
+  const nameInput = $("#newAccountName");
+  const handleInput = $("#newAccountHandle");
+  const avatarInput = $("#newAccountAvatar");
+  const name = nameInput.value.trim();
+  if (!name) {
+    toast("アカウント名を入れてね。");
+    return;
+  }
+  let handle = sanitizeHandle(handleInput.value || name);
+  const existingHandles = new Set(accounts.map((account) => account.handle.toLowerCase()));
+  if (existingHandles.has(handle.toLowerCase())) {
+    let n = 2;
+    const base = handle.slice(0, 20);
+    while (existingHandles.has(`${base}_${n}`.toLowerCase())) n += 1;
+    handle = `${base}_${n}`;
+  }
+  const account = {
+    id: uid("account"),
+    name: name.slice(0, 24),
+    handle,
+    avatar: (avatarInput.value.trim() || "✦").slice(0, 4)
+  };
+  accounts.push(account);
+  saveAccounts();
+  activeAccountId = account.id;
+  saveActiveAccountId();
+  nameInput.value = "";
+  handleInput.value = "";
+  avatarInput.value = "";
+  renderAll();
+  renderSettingsControls();
+  toast("投稿アカウントを追加しました。");
+}
+
+function deleteAccount(accountId) {
+  const account = accountById(accountId);
+  if (accounts.length <= 1) {
+    toast("投稿アカウントは1つ以上必要です。");
+    return;
+  }
+  const used = fragments.some((post) => post.accountId === accountId);
+  if (used) {
+    toast("このアカウントにはポストがあるので、今は削除できません。");
+    return;
+  }
+  if (!confirm(`「${account.name}」を削除しますか？`)) return;
+  accounts = accounts.filter((item) => item.id !== accountId);
+  if (activeAccountId === accountId) activeAccountId = accounts[0].id;
+  saveAccounts();
+  saveActiveAccountId();
+  renderAll();
+  renderSettingsControls();
+}
+
+function openAccountSettings() {
+  closeModal("accountModal");
+  switchView("settings");
+  setTimeout(() => $("#newAccountName").focus(), 80);
+}
+
+function switchView(target) {
+  currentView = target;
+  $$(".view").forEach((view) => view.classList.toggle("is-active", view.dataset.view === target));
+  $$(".nav-item").forEach((item) => item.classList.toggle("is-active", item.dataset.target === target));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const add = $("#openQuickAdd");
+  if (add) {
+    add.setAttribute("aria-label", target === "garden" ? "種を追加する" : "ポストする");
+    add.classList.toggle("garden-add", target === "garden");
+  }
+  if (target === "timeline") renderTimeline();
+  if (target === "garden") renderPickedShelf();
+  if (target === "search") setTimeout(() => $("#searchInput").focus(), 70);
+  if (target === "settings") {
+    renderSettingsControls();
+    renderTagManageList();
+    renderAccountManageList();
+  }
+}
+
+function handleFloatingAdd() {
+  if (currentView === "garden") openQuickAddModal();
+  else openFragmentModal();
+}
+
+function autoGrowTextarea(element, max = 180) {
+  if (!element) return;
+  element.style.height = "auto";
+  element.style.height = `${Math.min(max, Math.max(element.scrollHeight, 48))}px`;
+}
+
+function bindEventsV6() {
+  $("#openQuickAdd").addEventListener("click", handleFloatingAdd);
+  $("#saveQuickIdea").addEventListener("click", saveQuickIdea);
+  $("#submitTimelinePost").addEventListener("click", submitTimelinePost);
+  $("#openPostComposer").addEventListener("click", () => {
+    openFragmentModal(null, { prefill: $("#timelineComposer").value, fromInline: true });
+  });
+  $("#timelineComposer").addEventListener("input", (event) => autoGrowTextarea(event.currentTarget, 150));
+  $("#timelineComposer").addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitTimelinePost();
+  });
+
+  $("#saveFragmentButton").addEventListener("click", saveFragment);
+  $("#deleteFragmentButton").addEventListener("click", deleteCurrentFragment);
+  $("#postAccountSelect").addEventListener("change", (event) => {
+    $("#postEditorAvatar").textContent = accountById(event.target.value).avatar;
+  });
+
+  $("#confirmTransferButton").addEventListener("click", confirmTransfer);
+  $("#accountSwitchButton").addEventListener("click", openAccountModal);
+  $("#openAccountSettings").addEventListener("click", openAccountSettings);
+  $("#createAccountButton").addEventListener("click", createAccount);
+  $("#newAccountName").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); createAccount(); }
+  });
+  $("#timelineSearchJump").addEventListener("click", () => switchView("search"));
+
+  $$('[data-timeline-filter]').forEach((button) => {
+    button.addEventListener("click", () => {
+      timelineFilter = button.dataset.timelineFilter;
+      renderTimeline();
+    });
+  });
+
+  $("#threadEditButton").addEventListener("click", editCurrentThreadPost);
+  $("#threadQuoteButton").addEventListener("click", quoteCurrentThreadPost);
+  $("#threadGardenButton").addEventListener("click", openCurrentThreadGarden);
+  $("#submitReplyButton").addEventListener("click", submitReply);
+  $("#replyText").addEventListener("input", (event) => autoGrowTextarea(event.currentTarget, 130));
+
+  $("#saveDetail").addEventListener("click", saveDetail);
+  $("#stageDown").addEventListener("click", () => changeStage(-1));
+  $("#stageUp").addEventListener("click", () => changeStage(1));
+  $("#addRelation").addEventListener("click", addRelation);
+  $("#duplicateIdea").addEventListener("click", duplicateIdea);
+  $("#deleteIdea").addEventListener("click", deleteCurrentIdea);
+
+  $$(".nav-item").forEach((button) => {
+    button.addEventListener("click", () => switchView(button.dataset.target));
+  });
+  $$('[data-theme-mode]').forEach((button) => {
+    button.addEventListener("click", () => selectThemeMode(button.dataset.themeMode));
+  });
+  $$('[data-accent]').forEach((button) => {
+    button.addEventListener("click", () => selectAccent(button.dataset.accent));
+  });
+  $$('[data-tag-sort]').forEach((button) => {
+    button.addEventListener("click", () => selectTagSort(button.dataset.tagSort));
+  });
+  $$('[data-tag-expand]').forEach((button) => {
+    button.addEventListener("click", () => {
+      const context = button.dataset.tagExpand;
+      tagExpanded[context] = !tagExpanded[context];
+      button.textContent = tagExpanded[context] ? "上位だけ" : (context === "detail" ? "タグを選ぶ" : "すべて");
+      renderTagSelector(context);
+    });
+  });
+
+  $("#createTagButton").addEventListener("click", createTag);
+  $("#newTagInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); createTag(); }
+  });
+
+  $$('[data-close]').forEach((button) => {
+    button.addEventListener("click", () => closeModal(button.dataset.close));
+  });
+  $$(".modal-backdrop").forEach((backdrop) => {
+    backdrop.addEventListener("click", (event) => {
+      if (event.target === backdrop) {
+        backdrop.classList.add("hidden");
+        closeCategoryMenus();
+      }
+    });
+  });
+
+  $("#gardenStageFilter").addEventListener("change", renderGarden);
+  $("#searchInput").addEventListener("input", renderSearch);
+  $("#searchStageFilter").addEventListener("change", renderSearch);
+  document.addEventListener("click", () => closeCategoryMenus());
+
+  const handleSystemThemeChange = () => {
+    if (uiSettings.themeMode === "system") applyTheme();
+  };
+  if (typeof systemThemeQuery.addEventListener === "function") {
+    systemThemeQuery.addEventListener("change", handleSystemThemeChange);
+  } else if (typeof systemThemeQuery.addListener === "function") {
+    systemThemeQuery.addListener(handleSystemThemeChange);
+  }
+
+  bindInteractionGuards();
+}
+
+async function initV6() {
+  $(".version-badge").textContent = `v${APP_VERSION}`;
+  buildCategoryPickers();
+  bindEventsV6();
+  applyTheme();
+  renderTimelineProfile();
+
+  try {
+    db = await openDB();
+    await seedDefaultTags();
+    await reloadData();
+    await migrateLegacyMoods();
+    await migratePostsV6();
+    renderSettingsControls();
+    renderAll();
+  } catch (error) {
+    console.error(error);
+    alert("保存領域を開けませんでした。ブラウザのプライベートモードやストレージ設定を確認してください。");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", initV6);
