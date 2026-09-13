@@ -1,4 +1,4 @@
-const APP_VERSION = "6";
+const APP_VERSION = "6.1";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";

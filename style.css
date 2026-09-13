@@ -1,3 +1,23 @@
+
+/* ---------------------------------------------------------
+   Font
+   Exact Mamelon will be used automatically when either:
+   1) Mamelon is installed on the device, or
+   2) assets/fonts/Mamelon.woff2 (or Mamelon.otf) is added.
+   Until then, the app falls back to a rounded Japanese UI font.
+   --------------------------------------------------------- */
+@font-face {
+  font-family: "Mamelon";
+  src:
+    local("Mamelon"),
+    local("マメロン"),
+    url("assets/fonts/Mamelon.woff2") format("woff2"),
+    url("assets/fonts/Mamelon.otf") format("opentype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
   scrollbar-width: none;
@@ -73,7 +93,7 @@ body {
   min-height: 100%;
   background: #dfe6d7;
   color: var(--ink);
-  font-family: "Yu Mincho", "Hiragino Mincho ProN", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
+  font-family: "Mamelon", "Hiragino Maru Gothic ProN", "Yu Gothic UI", "Yu Gothic", system-ui, sans-serif;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -1610,7 +1630,7 @@ html[data-theme="dark"],
 html[data-theme="dark"] body {
   background: var(--app-bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", system-ui, sans-serif;
+  font-family: "Mamelon", "Hiragino Maru Gothic ProN", "Yu Gothic UI", "Yu Gothic", system-ui, sans-serif;
 }
 
 body {
@@ -2415,3 +2435,125 @@ html[data-theme="dark"] .floating-add { color:#fff; }
 .thread-modal { padding:0; }
 .transfer-modal { padding:22px 18px 18px; }
 .thread-modal .post-card { background:var(--modal-solid); }
+
+
+/* =========================================================
+   v6.1 TL refinement
+   ========================================================= */
+
+/* The timeline now starts with account bar + filters. Posting is done from the floating + button. */
+.inline-composer {
+  display: none !important;
+}
+
+/* Filters sit directly under the account bar. */
+.timeline-tabs {
+  top: calc(env(safe-area-inset-top) + 48px);
+  min-height: 43px;
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--app-bg) 96%, transparent);
+}
+
+.timeline-tabs button {
+  min-height: 43px;
+  font-size: 11px;
+}
+
+.timeline-tabs button.is-selected::after {
+  right: 22%;
+  left: 22%;
+  height: 2px;
+}
+
+/* Timeline cards: almost full-width, lightly rounded, no separator-line feed. */
+.timeline-list {
+  display: grid;
+  gap: 7px;
+  padding: 7px 5px 16px;
+}
+
+.post-card {
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 11px 11px 8px;
+  border: 1px solid var(--divider);
+  border-radius: 9px;
+  background: var(--panel-2);
+}
+
+.post-card.is-compact {
+  padding: 10px 11px 8px;
+}
+
+.post-card.is-thread,
+.post-card.is-reply {
+  border-bottom: 1px solid var(--divider);
+}
+
+/* Larger round icon sitting clearly at the upper-left of each memo card. */
+.post-card .account-avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 50%;
+  font-size: 18px;
+}
+
+.post-avatar-col {
+  align-items: flex-start;
+  padding-top: 1px;
+}
+
+.reply-thread-line {
+  top: 47px;
+  bottom: -18px;
+}
+
+.post-head {
+  min-height: 24px;
+}
+
+.post-author-line strong {
+  font-size: 12px;
+}
+
+.post-author-line span {
+  font-size: 9px;
+}
+
+.post-text {
+  margin-top: 3px;
+  font-size: 14px;
+  line-height: 1.62;
+}
+
+/* Search/thread cards also inherit the card language, but keep breathing room. */
+.search-timeline-list {
+  padding-inline: 0;
+}
+
+.thread-modal .post-card {
+  background: var(--panel-2);
+}
+
+/* On narrow iPhones, keep cards almost edge-to-edge. */
+@media (max-width: 420px) {
+  .timeline-list {
+    padding-inline: 4px;
+    gap: 6px;
+  }
+
+  .post-card {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 9px;
+    padding-inline: 9px;
+    border-radius: 8px;
+  }
+
+  .post-card .account-avatar {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+}
