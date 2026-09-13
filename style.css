@@ -3327,3 +3327,62 @@ body.post-screen-open .app-shell {
   scroll-margin: 0 !important;
   overflow-anchor: none;
 }
+
+
+/* =========================================================
+   v6.6 iOS refocus strategy
+   The writing field stays compact and scrolls internally.
+   The first tap after keyboard dismissal is manually refocused.
+   ========================================================= */
+
+#fragmentModal .post-editor-modal {
+  align-content: start;
+}
+
+#fragmentModal .post-compose-card {
+  align-self: start;
+  width: calc(100% - 20px);
+  max-height: min(430px, calc(100dvh - env(safe-area-inset-top) - 72px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#fragmentModal .post-editor-text {
+  flex: 0 0 auto;
+  height: clamp(170px, 27dvh, 230px);
+  min-height: 170px;
+  max-height: 230px;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#fragmentModal .post-editor-text::-webkit-scrollbar {
+  display: none;
+}
+
+#fragmentModal .post-option-panel {
+  flex: 0 0 auto;
+  max-height: 150px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+#fragmentModal .post-option-panel::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-height: 700px) {
+  #fragmentModal .post-editor-text {
+    height: 170px;
+    min-height: 170px;
+    max-height: 170px;
+  }
+
+  #fragmentModal .post-compose-card {
+    max-height: 370px;
+  }
+}

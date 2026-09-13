@@ -1,4 +1,4 @@
-const APP_VERSION = "6.5";
+const APP_VERSION = "6.6";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -2267,6 +2267,8 @@ function openFragmentModal(fragmentId = null, options = {}) {
 
   $("#fragmentModalTitle").textContent = post ? "ポストを編集" : (quoteTargetId ? "引用ポスト" : "ポスト");
   $("#fragmentText").value = post?.text || (options.prefill ?? "");
+  postSelectionStart = $("#fragmentText").value.length;
+  postSelectionEnd = postSelectionStart;
   $("#saveFragmentButton").textContent = post ? "保存" : "ポスト";
   $("#deleteFragmentButton").classList.toggle("hidden", !post);
   populatePostAccountSelect(post?.accountId || activeAccountId);
@@ -2368,6 +2370,9 @@ function focusPostEditorImmediately() {
 }
 
 function hidePostKeyboard() {
+  const field = $("#fragmentText");
+  if (document.activeElement === field) rememberPostSelection();
+
   const active = document.activeElement;
   if (active && typeof active.blur === "function") active.blur();
 
@@ -2378,25 +2383,38 @@ function hidePostKeyboard() {
   }
 }
 
-let postCardScrollBeforeRefocus = 0;
-let postRefocusGuardUntil = 0;
+let postSelectionStart = 0;
+let postSelectionEnd = 0;
+let postManualRefocusActive = false;
 
-function beginPostRefocusGuard() {
-  const card = $(".post-compose-card");
-  if (!card) return;
-
-  postCardScrollBeforeRefocus = card.scrollTop;
-  postRefocusGuardUntil = performance.now() + 700;
+function rememberPostSelection() {
+  const field = $("#fragmentText");
+  if (!field) return;
+  postSelectionStart = Number.isFinite(field.selectionStart) ? field.selectionStart : field.value.length;
+  postSelectionEnd = Number.isFinite(field.selectionEnd) ? field.selectionEnd : postSelectionStart;
 }
 
-function restorePostCardScrollDuringKeyboardOpen() {
-  if (performance.now() > postRefocusGuardUntil) return;
-  const card = $(".post-compose-card");
-  if (!card) return;
+function refocusPostWithoutViewportMove(event) {
+  const field = $("#fragmentText");
+  if (!field || document.activeElement === field) return;
 
-  if (Math.abs(card.scrollTop - postCardScrollBeforeRefocus) > 1) {
-    card.scrollTop = postCardScrollBeforeRefocus;
+  // Prevent iOS from performing its own tap-to-focus scroll/pan.
+  if (event?.cancelable) event.preventDefault();
+
+  postManualRefocusActive = true;
+  try {
+    field.focus({ preventScroll: true });
+  } catch {
+    field.focus();
   }
+
+  try {
+    field.setSelectionRange(postSelectionStart, postSelectionEnd);
+  } catch {}
+
+  requestAnimationFrame(() => {
+    postManualRefocusActive = false;
+  });
 }
 
 function keepFullscreenFocusMovementMinimal(target) {
@@ -2828,13 +2846,19 @@ function bindEventsV6() {
   $("#postKeyboardToggle").addEventListener("click", hidePostKeyboard);
   $("#postKindToggle").addEventListener("click", () => togglePostOptionPanel("kind"));
   $("#postTagToggle").addEventListener("click", () => togglePostOptionPanel("tag"));
-  $("#fragmentText").addEventListener("pointerdown", () => {
-    if (document.activeElement !== $("#fragmentText")) beginPostRefocusGuard();
-  }, { passive: true });
+  // When the keyboard has been dismissed, intercept the first tap and
+  // programmatically focus with preventScroll. This avoids iOS's native
+  // tap-to-focus viewport pan while preserving the previous caret position.
+  $("#fragmentText").addEventListener("pointerdown", (event) => {
+    if (document.activeElement !== $("#fragmentText")) {
+      refocusPostWithoutViewportMove(event);
+    }
+  }, { passive: false });
 
-  $("#fragmentText").addEventListener("touchstart", () => {
-    if (document.activeElement !== $("#fragmentText")) beginPostRefocusGuard();
-  }, { passive: true });
+  $("#fragmentText").addEventListener("selectionchange", rememberPostSelection);
+  $("#fragmentText").addEventListener("keyup", rememberPostSelection);
+  $("#fragmentText").addEventListener("click", rememberPostSelection);
+  $("#fragmentText").addEventListener("blur", rememberPostSelection);
 
   $("#fragmentText").addEventListener("focus", () => {
     const button = $("#postKeyboardToggle");
@@ -2842,9 +2866,6 @@ function bindEventsV6() {
       button.setAttribute("aria-pressed", "false");
       button.setAttribute("aria-label", "キーボードを閉じる");
     }
-
-    restorePostCardScrollDuringKeyboardOpen();
-    requestAnimationFrame(restorePostCardScrollDuringKeyboardOpen);
   });
 
   $("#confirmTransferButton").addEventListener("click", confirmTransfer);
@@ -2943,10 +2964,8 @@ function bindEditorViewportBehavior() {
   const correctActiveField = () => {
     const active = document.activeElement;
 
-    if (active?.id === "fragmentText") {
-      restorePostCardScrollDuringKeyboardOpen();
-      return;
-    }
+    // Never try to reposition the main post textarea.
+    if (active?.id === "fragmentText") return;
 
     if (active?.matches?.("input, textarea, select")) {
       keepFullscreenFocusMovementMinimal(active);
@@ -2964,10 +2983,7 @@ function bindEditorViewportBehavior() {
   }
 
   document.addEventListener("focusin", (event) => {
-    if (event.target.id === "fragmentText") {
-      restorePostCardScrollDuringKeyboardOpen();
-      return;
-    }
+    if (event.target.id === "fragmentText") return;
 
     if (event.target.matches?.("input, textarea, select")) {
       keepFullscreenFocusMovementMinimal(event.target);
