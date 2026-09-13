@@ -1,4 +1,4 @@
-const APP_VERSION = "6.4";
+const APP_VERSION = "6.5";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -2378,8 +2378,33 @@ function hidePostKeyboard() {
   }
 }
 
+let postCardScrollBeforeRefocus = 0;
+let postRefocusGuardUntil = 0;
+
+function beginPostRefocusGuard() {
+  const card = $(".post-compose-card");
+  if (!card) return;
+
+  postCardScrollBeforeRefocus = card.scrollTop;
+  postRefocusGuardUntil = performance.now() + 700;
+}
+
+function restorePostCardScrollDuringKeyboardOpen() {
+  if (performance.now() > postRefocusGuardUntil) return;
+  const card = $(".post-compose-card");
+  if (!card) return;
+
+  if (Math.abs(card.scrollTop - postCardScrollBeforeRefocus) > 1) {
+    card.scrollTop = postCardScrollBeforeRefocus;
+  }
+}
+
 function keepFullscreenFocusMovementMinimal(target) {
   if (!(target instanceof HTMLElement)) return;
+
+  // The large post textarea intentionally stays exactly where the user left it.
+  // Trying to make its entire bottom edge visible causes iOS to push the editor upward.
+  if (target.id === "fragmentText") return;
 
   const scroller = target.closest(".post-compose-card, .fullscreen-editor-body");
   if (!scroller) return;
@@ -2803,12 +2828,23 @@ function bindEventsV6() {
   $("#postKeyboardToggle").addEventListener("click", hidePostKeyboard);
   $("#postKindToggle").addEventListener("click", () => togglePostOptionPanel("kind"));
   $("#postTagToggle").addEventListener("click", () => togglePostOptionPanel("tag"));
+  $("#fragmentText").addEventListener("pointerdown", () => {
+    if (document.activeElement !== $("#fragmentText")) beginPostRefocusGuard();
+  }, { passive: true });
+
+  $("#fragmentText").addEventListener("touchstart", () => {
+    if (document.activeElement !== $("#fragmentText")) beginPostRefocusGuard();
+  }, { passive: true });
+
   $("#fragmentText").addEventListener("focus", () => {
     const button = $("#postKeyboardToggle");
     if (button) {
       button.setAttribute("aria-pressed", "false");
       button.setAttribute("aria-label", "キーボードを閉じる");
     }
+
+    restorePostCardScrollDuringKeyboardOpen();
+    requestAnimationFrame(restorePostCardScrollDuringKeyboardOpen);
   });
 
   $("#confirmTransferButton").addEventListener("click", confirmTransfer);
@@ -2906,6 +2942,12 @@ function bindEventsV6() {
 function bindEditorViewportBehavior() {
   const correctActiveField = () => {
     const active = document.activeElement;
+
+    if (active?.id === "fragmentText") {
+      restorePostCardScrollDuringKeyboardOpen();
+      return;
+    }
+
     if (active?.matches?.("input, textarea, select")) {
       keepFullscreenFocusMovementMinimal(active);
     }
@@ -2922,6 +2964,11 @@ function bindEditorViewportBehavior() {
   }
 
   document.addEventListener("focusin", (event) => {
+    if (event.target.id === "fragmentText") {
+      restorePostCardScrollDuringKeyboardOpen();
+      return;
+    }
+
     if (event.target.matches?.("input, textarea, select")) {
       keepFullscreenFocusMovementMinimal(event.target);
     }

@@ -3312,3 +3312,18 @@ body.post-screen-open .app-shell {
   transition: none !important;
   transform: none !important;
 }
+
+
+/* =========================================================
+   v6.5 post textarea refocus lock
+   Do not let reopening the iOS keyboard reposition the memo card.
+   ========================================================= */
+
+#fragmentModal .post-compose-card {
+  overflow-anchor: none;
+}
+
+#fragmentModal .post-editor-text {
+  scroll-margin: 0 !important;
+  overflow-anchor: none;
+}
