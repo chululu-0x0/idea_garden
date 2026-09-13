@@ -1,4 +1,4 @@
-const APP_VERSION = "6.3";
+const APP_VERSION = "6.4";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -1632,7 +1632,7 @@ async function deleteCurrentIdea() {
 /* Navigation */
 function closeModal(id) {
   $("#" + id)?.classList.add("hidden");
-  if (id === "fragmentModal") document.body.classList.remove("screen-open");
+  if (id === "fragmentModal") unlockPostScreen();
   closeCategoryMenus();
 }
 
@@ -2275,14 +2275,35 @@ function openFragmentModal(fragmentId = null, options = {}) {
   renderPostMetaSummary();
   renderPostQuotePreview();
   closePostOptionPanels();
+  lockPostScreen();
   $("#fragmentModal").classList.remove("hidden");
-  document.body.classList.add("screen-open");
-  updateVisualViewportVars();
 
   // Keep this synchronous with the user's tap so iOS can raise the keyboard immediately.
   focusPostEditorImmediately();
 }
 
+
+
+let postScreenScrollY = 0;
+
+function lockPostScreen() {
+  if (document.body.classList.contains("post-screen-open")) return;
+  postScreenScrollY = window.scrollY || window.pageYOffset || 0;
+
+  document.body.style.top = `-${postScreenScrollY}px`;
+  document.body.classList.add("screen-open", "post-screen-open");
+}
+
+function unlockPostScreen() {
+  if (!document.body.classList.contains("post-screen-open")) {
+    document.body.classList.remove("screen-open");
+    return;
+  }
+
+  document.body.classList.remove("post-screen-open", "screen-open");
+  document.body.style.top = "";
+  window.scrollTo(0, postScreenScrollY);
+}
 
 function renderPostMetaSummary() {
   const kindSummary = $("#postKindSummary");
@@ -2330,31 +2351,20 @@ function togglePostOptionPanel(type) {
 }
 
 function updateVisualViewportVars() {
-  const viewport = window.visualViewport;
-  const height = viewport ? viewport.height : window.innerHeight;
-  const top = viewport ? viewport.offsetTop : 0;
-  document.documentElement.style.setProperty("--editor-vv-height", `${Math.round(height)}px`);
-  document.documentElement.style.setProperty("--editor-vv-top", `${Math.round(top)}px`);
+  // v6.4: intentionally do not resize/reposition full-screen editors.
+  // iOS may change VisualViewport while its keyboard animates; moving the outer
+  // editor with it causes visible jumps. Only inner scroll areas are corrected.
 }
 
 function focusPostEditorImmediately() {
   const field = $("#fragmentText");
   if (!field) return;
 
-  const x = window.scrollX;
-  const y = window.scrollY;
-
   try {
     field.focus({ preventScroll: true });
   } catch {
     field.focus();
   }
-
-  requestAnimationFrame(() => {
-    if (window.scrollX !== x || window.scrollY !== y) {
-      window.scrollTo(x, y);
-    }
-  });
 }
 
 function hidePostKeyboard() {
@@ -2370,21 +2380,25 @@ function hidePostKeyboard() {
 
 function keepFullscreenFocusMovementMinimal(target) {
   if (!(target instanceof HTMLElement)) return;
-  if (!target.closest("#fragmentModal, .fullscreen-page")) return;
+
+  const scroller = target.closest(".post-compose-card, .fullscreen-editor-body");
+  if (!scroller) return;
 
   requestAnimationFrame(() => {
     const viewport = window.visualViewport;
-    const safeTop = (viewport?.offsetTop || 0) + 58;
-    const safeBottom = (viewport?.offsetTop || 0) +
-      (viewport?.height || window.innerHeight) - 14;
-    const rect = target.getBoundingClientRect();
+    const viewportTop = viewport?.offsetTop || 0;
+    const viewportBottom = viewportTop + (viewport?.height || window.innerHeight);
 
-    if (rect.top < safeTop || rect.bottom > safeBottom) {
-      target.scrollIntoView({
-        block: "nearest",
-        inline: "nearest",
-        behavior: "auto"
-      });
+    const targetRect = target.getBoundingClientRect();
+    const scrollerRect = scroller.getBoundingClientRect();
+
+    const safeTop = Math.max(scrollerRect.top + 8, viewportTop + 58);
+    const safeBottom = Math.min(scrollerRect.bottom - 8, viewportBottom - 10);
+
+    if (targetRect.bottom > safeBottom) {
+      scroller.scrollTop += targetRect.bottom - safeBottom + 8;
+    } else if (targetRect.top < safeTop) {
+      scroller.scrollTop -= safeTop - targetRect.top + 8;
     }
   });
 }
@@ -2890,13 +2904,21 @@ function bindEventsV6() {
 
 
 function bindEditorViewportBehavior() {
-  updateVisualViewportVars();
+  const correctActiveField = () => {
+    const active = document.activeElement;
+    if (active?.matches?.("input, textarea, select")) {
+      keepFullscreenFocusMovementMinimal(active);
+    }
+  };
 
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", updateVisualViewportVars);
-    window.visualViewport.addEventListener("scroll", updateVisualViewportVars);
+    window.visualViewport.addEventListener("resize", () => {
+      requestAnimationFrame(correctActiveField);
+    });
   } else {
-    window.addEventListener("resize", updateVisualViewportVars);
+    window.addEventListener("resize", () => {
+      requestAnimationFrame(correctActiveField);
+    });
   }
 
   document.addEventListener("focusin", (event) => {

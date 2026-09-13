@@ -3252,3 +3252,63 @@ body.screen-open {
     padding-inline: 12px;
   }
 }
+
+
+/* =========================================================
+   v6.4 iOS keyboard stability
+   Keep the outer editor fixed; only inner content may scroll.
+   ========================================================= */
+
+body.post-screen-open {
+  position: fixed;
+  right: 0;
+  left: 0;
+  width: 100%;
+  overflow: hidden;
+  background: var(--accent);
+}
+
+/* Nothing from the TL should remain visible through iOS's translucent keyboard. */
+body.post-screen-open .app-shell {
+  visibility: hidden;
+}
+
+#fragmentModal.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  top: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 100%;
+  background: var(--accent);
+}
+
+#fragmentModal .post-editor-modal {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Account creation and other full-screen editors also stay still while the keyboard animates. */
+.fullscreen-page {
+  position: fixed;
+  inset: 0;
+  top: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+}
+
+/* Do not animate layout/scroll position when the keyboard appears or disappears. */
+.post-compose-card,
+.fullscreen-editor-body {
+  scroll-behavior: auto !important;
+  overscroll-behavior: contain;
+}
+
+#fragmentModal,
+#fragmentModal .post-editor-modal,
+.fullscreen-page {
+  transition: none !important;
+  transform: none !important;
+}
