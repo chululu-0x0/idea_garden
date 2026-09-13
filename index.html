@@ -13,7 +13,7 @@
   <div class="top-status-fade" aria-hidden="true"></div>
 
   <div class="app-shell">
-    <div class="version-badge">v6.1</div>
+    <div class="version-badge">v6.2</div>
 
     <main class="main" id="main">
       <!-- TIMELINE -->
@@ -344,12 +344,40 @@
   <div class="modal-backdrop hidden" id="accountModal">
     <section class="modal account-modal" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
       <header class="simple-modal-head">
-        <h2 id="accountModalTitle">アカウントを切り替える</h2>
+        <h2 id="accountModalTitle">アカウント</h2>
         <button class="modal-close plain-close" data-close="accountModal" aria-label="閉じる">×</button>
       </header>
       <div class="account-switch-list" id="accountSwitchList"></div>
-      <button class="ghost-button full-button" id="openAccountSettings" type="button">アカウントを追加・管理</button>
+      <button class="ghost-button full-button" id="openAccountSettings" type="button">＋ アカウント追加</button>
     </section>
+  </div>
+
+  <!-- Full-screen account creator -->
+  <div class="fullscreen-page hidden" id="accountCreateModal" role="dialog" aria-modal="true" aria-labelledby="accountCreateTitle">
+    <header class="fullscreen-editor-head">
+      <button class="fullscreen-back" id="closeAccountCreate" type="button" aria-label="戻る">‹</button>
+      <h2 id="accountCreateTitle">アカウント追加</h2>
+      <button class="fullscreen-save" id="accountCreateSave" type="button">追加</button>
+    </header>
+    <div class="fullscreen-editor-body account-create-screen">
+      <div class="account-create-preview">
+        <span class="account-avatar account-create-avatar" id="accountCreateAvatarPreview">✦</span>
+        <div>
+          <strong id="accountCreateNamePreview">新しいアカウント</strong>
+          <small id="accountCreateHandlePreview">@handle</small>
+        </div>
+      </div>
+      <label>アイコン
+        <input id="accountCreateAvatar" type="text" maxlength="4" placeholder="✦" />
+      </label>
+      <label>アカウント名
+        <input id="accountCreateName" type="text" maxlength="24" placeholder="例：紅い魔女" />
+      </label>
+      <label>ユーザー名
+        <div class="handle-input-wrap"><span>@</span><input id="accountCreateHandle" type="text" maxlength="24" placeholder="akaimajo" /></div>
+      </label>
+      <p class="account-create-note">作品別でも、用途別でも。あとから投稿先を切り替えられます。</p>
+    </div>
   </div>
 
   <!-- Post thread -->

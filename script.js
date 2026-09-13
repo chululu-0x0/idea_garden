@@ -1,4 +1,4 @@
-const APP_VERSION = "6.1";
+const APP_VERSION = "6.2";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -1293,6 +1293,7 @@ function openFragmentModal(fragmentId = null) {
   renderFragmentKindChoices();
   renderTagSelector("fragment");
   $("#fragmentModal").classList.remove("hidden");
+  document.body.classList.add("screen-open");
   setTimeout(() => $("#fragmentText").focus(), 40);
 }
 
@@ -1629,6 +1630,7 @@ async function deleteCurrentIdea() {
 /* Navigation */
 function closeModal(id) {
   $("#" + id)?.classList.add("hidden");
+  if (id === "fragmentModal") document.body.classList.remove("screen-open");
   closeCategoryMenus();
 }
 
@@ -2261,7 +2263,7 @@ function openFragmentModal(fragmentId = null, options = {}) {
   fragmentSelectedTags = new Set(post?.tags || []);
   tagExpanded.fragment = false;
 
-  $("#fragmentModalTitle").textContent = post ? "ポストを編集" : (quoteTargetId ? "引用してポスト" : "ポストする");
+  $("#fragmentModalTitle").textContent = post ? "ポストを編集" : (quoteTargetId ? "引用ポスト" : "ポスト");
   $("#fragmentText").value = post?.text || (options.prefill ?? "");
   $("#saveFragmentButton").textContent = post ? "保存" : "ポスト";
   $("#deleteFragmentButton").classList.toggle("hidden", !post);
@@ -2270,6 +2272,7 @@ function openFragmentModal(fragmentId = null, options = {}) {
   renderTagSelector("fragment");
   renderPostQuotePreview();
   $("#fragmentModal").classList.remove("hidden");
+  document.body.classList.add("screen-open");
   setTimeout(() => $("#fragmentText").focus(), 40);
 }
 
@@ -2534,9 +2537,9 @@ function setActiveAccount(accountId, { close = true } = {}) {
 }
 
 async function createAccount() {
-  const nameInput = $("#newAccountName");
-  const handleInput = $("#newAccountHandle");
-  const avatarInput = $("#newAccountAvatar");
+  const nameInput = $("#accountCreateName");
+  const handleInput = $("#accountCreateHandle");
+  const avatarInput = $("#accountCreateAvatar");
   const name = nameInput.value.trim();
   if (!name) {
     toast("アカウント名を入れてね。");
@@ -2565,6 +2568,8 @@ async function createAccount() {
   avatarInput.value = "";
   renderAll();
   renderSettingsControls();
+  updateAccountCreatePreview();
+  closeAccountCreateScreen();
   toast("投稿アカウントを追加しました。");
 }
 
@@ -2588,10 +2593,34 @@ function deleteAccount(accountId) {
   renderSettingsControls();
 }
 
-function openAccountSettings() {
+function updateAccountCreatePreview() {
+  const avatar = $("#accountCreateAvatar")?.value.trim() || "✦";
+  const name = $("#accountCreateName")?.value.trim() || "新しいアカウント";
+  const rawHandle = $("#accountCreateHandle")?.value.trim();
+  const handle = rawHandle ? sanitizeHandle(rawHandle) : "handle";
+  if ($("#accountCreateAvatarPreview")) $("#accountCreateAvatarPreview").textContent = avatar.slice(0, 4);
+  if ($("#accountCreateNamePreview")) $("#accountCreateNamePreview").textContent = name.slice(0, 24);
+  if ($("#accountCreateHandlePreview")) $("#accountCreateHandlePreview").textContent = `@${handle}`;
+}
+
+function openAccountCreateScreen() {
   closeModal("accountModal");
-  switchView("settings");
-  setTimeout(() => $("#newAccountName").focus(), 80);
+  $("#accountCreateAvatar").value = "";
+  $("#accountCreateName").value = "";
+  $("#accountCreateHandle").value = "";
+  updateAccountCreatePreview();
+  $("#accountCreateModal").classList.remove("hidden");
+  document.body.classList.add("screen-open");
+  setTimeout(() => $("#accountCreateName").focus(), 80);
+}
+
+function closeAccountCreateScreen() {
+  $("#accountCreateModal").classList.add("hidden");
+  document.body.classList.remove("screen-open");
+}
+
+function openAccountSettings() {
+  openAccountCreateScreen();
 }
 
 function switchView(target) {
@@ -2646,10 +2675,17 @@ function bindEventsV6() {
 
   $("#confirmTransferButton").addEventListener("click", confirmTransfer);
   $("#accountSwitchButton").addEventListener("click", openAccountModal);
-  $("#openAccountSettings").addEventListener("click", openAccountSettings);
-  $("#createAccountButton").addEventListener("click", createAccount);
-  $("#newAccountName").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") { event.preventDefault(); createAccount(); }
+  $("#openAccountSettings").addEventListener("click", openAccountCreateScreen);
+  $("#accountCreateSave").addEventListener("click", createAccount);
+  $("#closeAccountCreate").addEventListener("click", closeAccountCreateScreen);
+  [$("#accountCreateAvatar"), $("#accountCreateName"), $("#accountCreateHandle")].forEach((input) => {
+    input.addEventListener("input", updateAccountCreatePreview);
+  });
+  $("#accountCreateName").addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      createAccount();
+    }
   });
   $("#timelineSearchJump").addEventListener("click", () => switchView("search"));
 
