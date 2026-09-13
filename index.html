@@ -13,7 +13,7 @@
   <div class="top-status-fade" aria-hidden="true"></div>
 
   <div class="app-shell">
-    <div class="version-badge">v6.2</div>
+    <div class="version-badge">v6.3</div>
 
     <main class="main" id="main">
       <!-- TIMELINE -->
@@ -305,38 +305,58 @@
   <div class="modal-backdrop hidden" id="fragmentModal">
     <section class="modal post-editor-modal" role="dialog" aria-modal="true" aria-labelledby="fragmentModalTitle">
       <header class="post-editor-head">
-        <button class="modal-close plain-close" data-close="fragmentModal" aria-label="閉じる">×</button>
-        <h2 id="fragmentModalTitle">ポストする</h2>
+        <button class="post-editor-close" data-close="fragmentModal" type="button" aria-label="閉じる">×</button>
+
+        <label class="post-account-picker" aria-label="投稿アカウント">
+          <span class="account-avatar" id="postEditorAvatar">✦</span>
+          <select id="postAccountSelect" aria-label="投稿アカウント"></select>
+        </label>
+
+        <button class="post-keyboard-button" id="postKeyboardToggle" type="button"
+          aria-label="キーボードを閉じる" aria-pressed="false">
+          <span aria-hidden="true">⌨︎</span>
+        </button>
+
         <button class="post-button" id="saveFragmentButton" type="button">ポスト</button>
+        <h2 class="sr-only" id="fragmentModalTitle">ポスト</h2>
       </header>
 
-      <div class="post-account-line">
-        <span class="account-avatar" id="postEditorAvatar">✦</span>
-        <select id="postAccountSelect" aria-label="投稿アカウント"></select>
-      </div>
+      <div class="post-compose-card">
+        <div class="post-meta-controls">
+          <button class="post-meta-toggle" id="postKindToggle" type="button" aria-expanded="false">
+            <span>種類</span>
+            <strong id="postKindSummary">未分類</strong>
+          </button>
+          <button class="post-meta-toggle" id="postTagToggle" type="button" aria-expanded="false">
+            <span>タグ</span>
+            <strong id="postTagSummary">なし</strong>
+          </button>
+        </div>
 
-      <textarea class="post-editor-text" id="fragmentText" rows="8" maxlength="5000" placeholder="整えなくていい。いま浮かんだまま書く。"></textarea>
+        <div class="post-selected-meta" id="postSelectedMeta" aria-live="polite"></div>
 
-      <div class="quote-preview hidden" id="quotePreview"></div>
-
-      <details class="post-options">
-        <summary>タグ・種類</summary>
-
-        <div class="fragment-kind-editor">
-          <span class="field-caption">種類</span>
+        <div class="post-option-panel hidden" id="postKindPanel">
           <div class="mini-choice-row" id="fragmentKindChoices"></div>
         </div>
 
-        <div class="tag-selector-block">
-          <div class="tag-selector-head">
-            <span>タグ</span>
+        <div class="post-option-panel hidden" id="postTagPanel">
+          <div class="post-tag-panel-head">
+            <span>タグを選ぶ</span>
             <button class="tag-expand-button" type="button" data-tag-expand="fragment">すべて</button>
           </div>
           <div class="tag-chip-list" id="fragmentTagList"></div>
         </div>
-      </details>
 
-      <button class="ghost-button delete-post-button hidden" id="deleteFragmentButton" type="button">このポストを削除</button>
+        <textarea class="post-editor-text" id="fragmentText" rows="8" maxlength="5000"
+          inputmode="text" enterkeyhint="enter"
+          placeholder="整えなくていい。いま浮かんだまま書く。"></textarea>
+
+        <div class="quote-preview hidden" id="quotePreview"></div>
+
+        <button class="ghost-button delete-post-button hidden" id="deleteFragmentButton" type="button">
+          このポストを削除
+        </button>
+      </div>
     </section>
   </div>
 

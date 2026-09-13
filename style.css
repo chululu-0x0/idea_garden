@@ -2923,3 +2923,332 @@ body.screen-open {
     border-radius: 0;
   }
 }
+
+
+/* =========================================================
+   v6.3 post composer
+   accent background + white memo card + keyboard controls
+   ========================================================= */
+
+:root {
+  --editor-vv-height: 100dvh;
+  --editor-vv-top: 0px;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+#fragmentModal.modal-backdrop {
+  inset: auto 0 auto 0;
+  top: var(--editor-vv-top);
+  height: var(--editor-vv-height);
+  padding: 0;
+  overflow: hidden;
+  background: var(--accent);
+  backdrop-filter: none;
+}
+
+#fragmentModal .post-editor-modal {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: env(safe-area-inset-top) 0 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--accent);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  animation: none;
+}
+
+#fragmentModal .post-editor-head {
+  position: relative;
+  top: auto;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  min-height: 54px;
+  padding: 4px 12px 6px;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.post-editor-close,
+.post-keyboard-button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,.18);
+  color: #fff;
+  cursor: pointer;
+}
+
+.post-editor-close {
+  margin-right: 7px;
+  font-size: 25px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.post-keyboard-button {
+  font-size: 19px;
+}
+
+.post-keyboard-button[aria-pressed="true"] {
+  background: rgba(255,255,255,.10);
+  opacity: .78;
+}
+
+.post-account-picker {
+  position: relative;
+  display: block;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  cursor: pointer;
+}
+
+.post-account-picker .account-avatar {
+  width: 42px;
+  height: 42px;
+  border: 2px solid rgba(255,255,255,.78);
+  background: rgba(255,255,255,.95);
+  color: var(--accent-strong);
+  font-size: 17px;
+}
+
+.post-account-picker select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+#fragmentModal .post-button {
+  min-width: 58px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.post-compose-card {
+  min-height: 0;
+  margin: 2px 10px calc(10px + env(safe-area-inset-bottom));
+  padding: 10px 11px 12px;
+  border: 1px solid rgba(255,255,255,.92);
+  border-radius: 10px;
+  background: #fff;
+  color: #292b31;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  scroll-padding-block: 10px 18px;
+}
+
+.post-compose-card::-webkit-scrollbar {
+  display: none;
+}
+
+.post-meta-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+
+.post-meta-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid #e4e5e9;
+  border-radius: 8px;
+  background: #f7f7f9;
+  color: #6e727a;
+  cursor: pointer;
+  font-size: 9px;
+}
+
+.post-meta-toggle strong {
+  color: #292b31;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.post-meta-toggle[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent) 48%, #dedfe4);
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+}
+
+.post-selected-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-height: 24px;
+  margin-bottom: 5px;
+}
+
+.post-selected-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 11%, #f7f7f8);
+  color: var(--accent-strong);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.post-selected-chip.is-kind {
+  background: #f0f1f4;
+  color: #646871;
+}
+
+.post-option-panel {
+  margin: 3px 0 9px;
+  padding: 9px;
+  border: 1px solid #ececf0;
+  border-radius: 9px;
+  background: #fafafd;
+}
+
+.post-option-panel .mini-choice,
+.post-option-panel .tag-chip {
+  color: #60646d;
+  border-color: #e2e3e7;
+  background: #fff;
+}
+
+.post-option-panel .mini-choice.is-selected,
+.post-option-panel .tag-chip.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+  color: var(--accent-strong);
+}
+
+.post-tag-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+  color: #747880;
+  font-size: 9px;
+}
+
+#fragmentModal .tag-expand-button {
+  color: var(--accent-strong);
+}
+
+#fragmentModal .post-editor-text {
+  display: block;
+  width: 100%;
+  min-height: 210px;
+  height: auto;
+  margin: 0;
+  padding: 9px 2px 20px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  resize: none;
+  overflow-y: visible;
+  background: transparent;
+  color: #292b31;
+  font-size: 16px;
+  line-height: 1.72;
+  caret-color: var(--accent);
+  scroll-margin-block: 8px;
+}
+
+#fragmentModal .post-editor-text::placeholder {
+  color: #a5a8af;
+}
+
+#fragmentModal .quote-preview {
+  width: 100%;
+  margin: 7px 0 0;
+  border-color: #e5e6ea;
+  background: #f8f8fa;
+  color: #34373d;
+}
+
+#fragmentModal .delete-post-button {
+  width: 100%;
+  margin: 12px 0 0;
+  color: #a45e68;
+  border-color: #e8d5d8;
+}
+
+/* Reduce iOS focus jumping: shrink the editor to the actual visible viewport. */
+.fullscreen-page {
+  inset: auto 0 auto 0;
+  top: var(--editor-vv-top);
+  height: var(--editor-vv-height);
+  min-height: 0;
+}
+
+.fullscreen-editor-body {
+  min-height: 0;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+  scroll-padding-block: 10px 18px;
+}
+
+.fullscreen-editor-body input,
+.fullscreen-editor-body textarea,
+#fragmentModal input,
+#fragmentModal textarea {
+  scroll-margin-block: 10px;
+}
+
+@media (max-width: 420px) {
+  #fragmentModal .post-editor-head {
+    gap: 6px;
+    padding-inline: 9px;
+  }
+
+  .post-editor-close {
+    margin-right: 5px;
+  }
+
+  .post-compose-card {
+    margin-inline: 7px;
+    border-radius: 9px;
+  }
+
+  #fragmentModal .post-button {
+    padding-inline: 12px;
+  }
+}

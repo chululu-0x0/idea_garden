@@ -1,4 +1,4 @@
-const APP_VERSION = "6.2";
+const APP_VERSION = "6.3";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -732,6 +732,7 @@ function renderTagSelector(context) {
       if (selected.has(tag.id)) selected.delete(tag.id);
       else selected.add(tag.id);
       renderTagSelector(context);
+      if (context === "fragment") renderPostMetaSummary();
     });
     container.appendChild(button);
   });
@@ -1275,6 +1276,7 @@ function renderFragmentKindChoices() {
     button.addEventListener("click", () => {
       fragmentSelectedKind = kind;
       renderFragmentKindChoices();
+      renderPostMetaSummary();
     });
     row.appendChild(button);
   });
@@ -2270,10 +2272,121 @@ function openFragmentModal(fragmentId = null, options = {}) {
   populatePostAccountSelect(post?.accountId || activeAccountId);
   renderFragmentKindChoices();
   renderTagSelector("fragment");
+  renderPostMetaSummary();
   renderPostQuotePreview();
+  closePostOptionPanels();
   $("#fragmentModal").classList.remove("hidden");
   document.body.classList.add("screen-open");
-  setTimeout(() => $("#fragmentText").focus(), 40);
+  updateVisualViewportVars();
+
+  // Keep this synchronous with the user's tap so iOS can raise the keyboard immediately.
+  focusPostEditorImmediately();
+}
+
+
+function renderPostMetaSummary() {
+  const kindSummary = $("#postKindSummary");
+  const tagSummary = $("#postTagSummary");
+  const selectedMeta = $("#postSelectedMeta");
+  if (!kindSummary || !tagSummary || !selectedMeta) return;
+
+  kindSummary.textContent = fragmentSelectedKind || "未分類";
+  const selectedTags = tags.filter((tag) => fragmentSelectedTags.has(tag.id));
+  tagSummary.textContent = selectedTags.length ? `${selectedTags.length}件` : "なし";
+
+  selectedMeta.innerHTML = "";
+  const kindChip = document.createElement("span");
+  kindChip.className = "post-selected-chip is-kind";
+  kindChip.textContent = fragmentSelectedKind || "未分類";
+  selectedMeta.appendChild(kindChip);
+
+  selectedTags.forEach((tag) => {
+    const chip = document.createElement("span");
+    chip.className = "post-selected-chip";
+    chip.textContent = `# ${tag.name}`;
+    selectedMeta.appendChild(chip);
+  });
+}
+
+function closePostOptionPanels() {
+  $("#postKindPanel")?.classList.add("hidden");
+  $("#postTagPanel")?.classList.add("hidden");
+  $("#postKindToggle")?.setAttribute("aria-expanded", "false");
+  $("#postTagToggle")?.setAttribute("aria-expanded", "false");
+}
+
+function togglePostOptionPanel(type) {
+  const target = type === "kind" ? $("#postKindPanel") : $("#postTagPanel");
+  const other = type === "kind" ? $("#postTagPanel") : $("#postKindPanel");
+  const button = type === "kind" ? $("#postKindToggle") : $("#postTagToggle");
+  const otherButton = type === "kind" ? $("#postTagToggle") : $("#postKindToggle");
+  if (!target || !button) return;
+
+  const shouldOpen = target.classList.contains("hidden");
+  target.classList.toggle("hidden", !shouldOpen);
+  other?.classList.add("hidden");
+  button.setAttribute("aria-expanded", String(shouldOpen));
+  otherButton?.setAttribute("aria-expanded", "false");
+}
+
+function updateVisualViewportVars() {
+  const viewport = window.visualViewport;
+  const height = viewport ? viewport.height : window.innerHeight;
+  const top = viewport ? viewport.offsetTop : 0;
+  document.documentElement.style.setProperty("--editor-vv-height", `${Math.round(height)}px`);
+  document.documentElement.style.setProperty("--editor-vv-top", `${Math.round(top)}px`);
+}
+
+function focusPostEditorImmediately() {
+  const field = $("#fragmentText");
+  if (!field) return;
+
+  const x = window.scrollX;
+  const y = window.scrollY;
+
+  try {
+    field.focus({ preventScroll: true });
+  } catch {
+    field.focus();
+  }
+
+  requestAnimationFrame(() => {
+    if (window.scrollX !== x || window.scrollY !== y) {
+      window.scrollTo(x, y);
+    }
+  });
+}
+
+function hidePostKeyboard() {
+  const active = document.activeElement;
+  if (active && typeof active.blur === "function") active.blur();
+
+  const button = $("#postKeyboardToggle");
+  if (button) {
+    button.setAttribute("aria-pressed", "true");
+    button.setAttribute("aria-label", "キーボードは閉じています");
+  }
+}
+
+function keepFullscreenFocusMovementMinimal(target) {
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.closest("#fragmentModal, .fullscreen-page")) return;
+
+  requestAnimationFrame(() => {
+    const viewport = window.visualViewport;
+    const safeTop = (viewport?.offsetTop || 0) + 58;
+    const safeBottom = (viewport?.offsetTop || 0) +
+      (viewport?.height || window.innerHeight) - 14;
+    const rect = target.getBoundingClientRect();
+
+    if (rect.top < safeTop || rect.bottom > safeBottom) {
+      target.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+        behavior: "auto"
+      });
+    }
+  });
 }
 
 async function saveFragment() {
@@ -2673,6 +2786,17 @@ function bindEventsV6() {
     $("#postEditorAvatar").textContent = accountById(event.target.value).avatar;
   });
 
+  $("#postKeyboardToggle").addEventListener("click", hidePostKeyboard);
+  $("#postKindToggle").addEventListener("click", () => togglePostOptionPanel("kind"));
+  $("#postTagToggle").addEventListener("click", () => togglePostOptionPanel("tag"));
+  $("#fragmentText").addEventListener("focus", () => {
+    const button = $("#postKeyboardToggle");
+    if (button) {
+      button.setAttribute("aria-pressed", "false");
+      button.setAttribute("aria-label", "キーボードを閉じる");
+    }
+  });
+
   $("#confirmTransferButton").addEventListener("click", confirmTransfer);
   $("#accountSwitchButton").addEventListener("click", openAccountModal);
   $("#openAccountSettings").addEventListener("click", openAccountCreateScreen);
@@ -2764,10 +2888,29 @@ function bindEventsV6() {
   bindInteractionGuards();
 }
 
+
+function bindEditorViewportBehavior() {
+  updateVisualViewportVars();
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", updateVisualViewportVars);
+    window.visualViewport.addEventListener("scroll", updateVisualViewportVars);
+  } else {
+    window.addEventListener("resize", updateVisualViewportVars);
+  }
+
+  document.addEventListener("focusin", (event) => {
+    if (event.target.matches?.("input, textarea, select")) {
+      keepFullscreenFocusMovementMinimal(event.target);
+    }
+  });
+}
+
 async function initV6() {
   $(".version-badge").textContent = `v${APP_VERSION}`;
   buildCategoryPickers();
   bindEventsV6();
+  bindEditorViewportBehavior();
   applyTheme();
   renderTimelineProfile();
 
