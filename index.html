@@ -13,7 +13,7 @@
   <div class="top-status-fade" aria-hidden="true"></div>
 
   <div class="app-shell">
-    <div class="version-badge">v6.6</div>
+    <div class="version-badge">v6.7</div>
 
     <main class="main" id="main">
       <!-- TIMELINE -->
@@ -307,10 +307,10 @@
       <header class="post-editor-head">
         <button class="post-editor-close" data-close="fragmentModal" type="button" aria-label="閉じる">×</button>
 
-        <label class="post-account-picker" aria-label="投稿アカウント">
+        <button class="post-account-picker" id="postAccountPickerButton" type="button" aria-label="投稿アカウントを切り替える">
           <span class="account-avatar" id="postEditorAvatar">✦</span>
-          <select id="postAccountSelect" aria-label="投稿アカウント"></select>
-        </label>
+        </button>
+        <input id="postAccountSelect" type="hidden" value="" />
 
         <button class="post-keyboard-button" id="postKeyboardToggle" type="button"
           aria-label="キーボードを閉じる" aria-pressed="false">
@@ -387,8 +387,29 @@
           <small id="accountCreateHandlePreview">@handle</small>
         </div>
       </div>
-      <label>アイコン
+
+      <section class="avatar-image-editor">
+        <div class="avatar-crop-shell">
+          <canvas id="accountAvatarCropCanvas" width="240" height="240" class="hidden" aria-label="アイコン画像の切り抜きプレビュー"></canvas>
+          <div class="avatar-crop-empty" id="accountAvatarCropEmpty">✦</div>
+        </div>
+
+        <div class="avatar-image-actions">
+          <button class="soft-button" id="accountAvatarChoose" type="button">画像を選ぶ</button>
+          <button class="ghost-button hidden" id="accountAvatarRemove" type="button">画像を外す</button>
+          <input id="accountAvatarFile" type="file" accept="image/*" hidden />
+        </div>
+
+        <div class="avatar-adjustments hidden" id="accountAvatarAdjustments">
+          <label><span>拡大</span><input id="accountAvatarZoom" type="range" min="100" max="300" value="100" step="1" /></label>
+          <label><span>左右</span><input id="accountAvatarPanX" type="range" min="-100" max="100" value="0" step="1" /></label>
+          <label><span>上下</span><input id="accountAvatarPanY" type="range" min="-100" max="100" value="0" step="1" /></label>
+        </div>
+      </section>
+
+      <label>文字アイコン
         <input id="accountCreateAvatar" type="text" maxlength="4" placeholder="✦" />
+        <small class="field-note">画像を選ばない場合はこちらを使います。</small>
       </label>
       <label>アカウント名
         <input id="accountCreateName" type="text" maxlength="24" placeholder="例：紅い魔女" />

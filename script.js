@@ -1,4 +1,4 @@
-const APP_VERSION = "6.6";
+const APP_VERSION = "6.7";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -1775,6 +1775,7 @@ function bindEvents() {
 /* Initial setup */
 async function init() {
   $(".version-badge").textContent = `v${APP_VERSION}`;
+  document.body.classList.toggle("timeline-active", currentView === "timeline");
   buildCategoryPickers();
   renderFragmentKindFilter();
   bindEvents();
@@ -1827,7 +1828,7 @@ function loadSettings() {
 }
 
 function loadAccounts() {
-  const fallback = [{ id: "account_main", name: "メイン", handle: "main", avatar: "✦" }];
+  const fallback = [{ id: "account_main", name: "メイン", handle: "main", avatar: "✦", avatarImage: "" }];
   try {
     const parsed = JSON.parse(localStorage.getItem(ACCOUNT_KEY) || "null");
     if (!Array.isArray(parsed) || !parsed.length) return fallback;
@@ -1837,7 +1838,8 @@ function loadAccounts() {
         id: String(item.id),
         name: String(item.name).slice(0, 24),
         handle: sanitizeHandle(item.handle || item.name),
-        avatar: String(item.avatar || "✦").slice(0, 4)
+        avatar: String(item.avatar || "✦").slice(0, 4),
+        avatarImage: typeof item.avatarImage === "string" ? item.avatarImage : ""
       }));
     return cleaned.length ? cleaned : fallback;
   } catch {
@@ -1876,6 +1878,21 @@ function activeAccount() {
   return accountById(activeAccountId);
 }
 
+function accountAvatarHTML(account, extraClass = "") {
+  const className = `account-avatar${extraClass ? ` ${extraClass}` : ""}${account?.avatarImage ? " has-image" : ""}`;
+  if (account?.avatarImage) {
+    return `<span class="${className}"><img src="${escapeHTML(account.avatarImage)}" alt="" /></span>`;
+  }
+  return `<span class="${className}">${escapeHTML(account?.avatar || "✦")}</span>`;
+}
+
+function setAccountAvatarElement(element, account) {
+  if (!element) return;
+  element.classList.toggle("has-image", Boolean(account?.avatarImage));
+  if (account?.avatarImage) element.innerHTML = `<img src="${escapeHTML(account.avatarImage)}" alt="" />`;
+  else element.textContent = account?.avatar || "✦";
+}
+
 function resolveTheme() {
   if (uiSettings.themeMode === "light") return "light";
   if (uiSettings.themeMode === "dark") return "dark";
@@ -1889,7 +1906,9 @@ function applyTheme() {
   document.documentElement.dataset.accent = uiSettings.accent || "rose";
   const themeColor = $("meta[name='theme-color']");
   if (themeColor) {
-    themeColor.setAttribute("content", resolvedTheme === "dark" ? "#101114" : "#ffffff");
+    const accentMap = { rose:"#d96f8d", mint:"#59a98d", blue:"#5f8fd8", violet:"#9074d5", amber:"#d49a45", coral:"#dc796c" };
+    const color = currentView === "timeline" ? (accentMap[uiSettings.accent] || accentMap.rose) : (resolvedTheme === "dark" ? "#101114" : "#ffffff");
+    themeColor.setAttribute("content", color);
   }
   renderSettingsControls();
 }
@@ -1996,7 +2015,7 @@ function renderQuoteBlock(post) {
   const account = accountById(quoted.accountId);
   return `
     <div class="quoted-post" data-quote-open="${quoted.id}">
-      <div class="quoted-head"><span>${escapeHTML(account.avatar)}</span><strong>${escapeHTML(account.name)}</strong><small>@${escapeHTML(account.handle)}</small></div>
+      <div class="quoted-head">${accountAvatarHTML(account, "tiny")}<strong>${escapeHTML(account.name)}</strong><small>@${escapeHTML(account.handle)}</small></div>
       <p>${escapeHTML(quoted.text || "")}</p>
     </div>
   `;
@@ -2013,7 +2032,7 @@ function createPostCard(post, { compact = false, thread = false } = {}) {
 
   article.innerHTML = `
     <div class="post-avatar-col">
-      <span class="account-avatar">${escapeHTML(account.avatar)}</span>
+      ${accountAvatarHTML(account)}
       ${post.parentId ? '<span class="reply-thread-line"></span>' : ''}
     </div>
     <div class="post-main">
@@ -2091,11 +2110,11 @@ async function togglePostFlag(postId, field) {
 
 function renderTimelineProfile() {
   const account = activeAccount();
-  $("#activeAccountAvatar").textContent = account.avatar;
+  setAccountAvatarElement($("#activeAccountAvatar"), account);
   $("#activeAccountName").textContent = account.name;
   $("#activeAccountHandle").textContent = `@${account.handle}`;
-  $("#composerAvatar").textContent = account.avatar;
-  $("#replyAvatar").textContent = account.avatar;
+  setAccountAvatarElement($("#composerAvatar"), account);
+  setAccountAvatarElement($("#replyAvatar"), account);
 }
 
 function renderTimelineTabs() {
@@ -2143,7 +2162,7 @@ function renderPickedShelf() {
     const row = document.createElement("div");
     row.className = "picked-post-row";
     row.innerHTML = `
-      <span class="account-avatar tiny">${escapeHTML(account.avatar)}</span>
+      ${accountAvatarHTML(account, "tiny")}
       <button class="picked-post-text" type="button">${escapeHTML(post.text || "")}</button>
       <button class="picked-to-garden" type="button">種にする</button>
       <button class="picked-dismiss" type="button" aria-label="拾った印を外す">×</button>
@@ -2229,18 +2248,11 @@ async function submitTimelinePost() {
 }
 
 function populatePostAccountSelect(selectedId = activeAccountId) {
-  const select = $("#postAccountSelect");
-  if (!select) return;
-  select.innerHTML = "";
-  accounts.forEach((account) => {
-    const option = document.createElement("option");
-    option.value = account.id;
-    option.textContent = `${account.avatar} ${account.name}  @${account.handle}`;
-    select.appendChild(option);
-  });
-  select.value = accounts.some((account) => account.id === selectedId) ? selectedId : activeAccountId;
-  const account = accountById(select.value);
-  $("#postEditorAvatar").textContent = account.avatar;
+  const field = $("#postAccountSelect");
+  if (!field) return;
+  const resolvedId = accounts.some((account) => account.id === selectedId) ? selectedId : activeAccountId;
+  field.value = resolvedId;
+  setAccountAvatarElement($("#postEditorAvatar"), accountById(resolvedId));
 }
 
 function renderPostQuotePreview() {
@@ -2649,20 +2661,31 @@ async function confirmTransfer() {
   toast("ポストから種を作りました。");
 }
 
+let accountDrawerContext = "timeline";
+
 function renderAccountSwitchList() {
   const list = $("#accountSwitchList");
   if (!list) return;
   list.innerHTML = "";
+  const selectedId = accountDrawerContext === "post" ? ($("#postAccountSelect")?.value || activeAccountId) : activeAccountId;
+
   accounts.forEach((account) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `account-switch-row${account.id === activeAccountId ? " is-active" : ""}`;
+    button.className = `account-switch-row${account.id === selectedId ? " is-active" : ""}`;
     button.innerHTML = `
-      <span class="account-avatar">${escapeHTML(account.avatar)}</span>
+      ${accountAvatarHTML(account)}
       <span><strong>${escapeHTML(account.name)}</strong><small>@${escapeHTML(account.handle)}</small></span>
-      <i>${account.id === activeAccountId ? "✓" : ""}</i>
+      <i>${account.id === selectedId ? "✓" : ""}</i>
     `;
-    button.addEventListener("click", () => setActiveAccount(account.id));
+    button.addEventListener("click", () => {
+      if (accountDrawerContext === "post") {
+        populatePostAccountSelect(account.id);
+        closeModal("accountModal");
+      } else {
+        setActiveAccount(account.id);
+      }
+    });
     list.appendChild(button);
   });
 }
@@ -2677,7 +2700,7 @@ function renderAccountManageList() {
     row.className = "account-manage-row";
     row.innerHTML = `
       <button class="account-manage-main" type="button">
-        <span class="account-avatar tiny">${escapeHTML(account.avatar)}</span>
+        ${accountAvatarHTML(account, "tiny")}
         <span><strong>${escapeHTML(account.name)}</strong><small>@${escapeHTML(account.handle)} ・ ${count}件</small></span>
       </button>
       <button class="account-delete" type="button" aria-label="アカウントを削除">×</button>
@@ -2688,7 +2711,8 @@ function renderAccountManageList() {
   });
 }
 
-function openAccountModal() {
+function openAccountModal(context = "timeline") {
+  accountDrawerContext = context;
   renderAccountSwitchList();
   $("#accountModal").classList.remove("hidden");
 }
@@ -2705,6 +2729,79 @@ function setActiveAccount(accountId, { close = true } = {}) {
   populatePostAccountSelect(accountId);
   if (close) closeModal("accountModal");
 }
+
+let accountAvatarSourceImage = null;
+
+function resetAccountAvatarEditor() {
+  accountAvatarSourceImage = null;
+  const file = $("#accountAvatarFile");
+  if (file) file.value = "";
+  $("#accountAvatarZoom").value = "100";
+  $("#accountAvatarPanX").value = "0";
+  $("#accountAvatarPanY").value = "0";
+  $("#accountAvatarCropCanvas").classList.add("hidden");
+  $("#accountAvatarCropEmpty").classList.remove("hidden");
+  $("#accountAvatarAdjustments").classList.add("hidden");
+  $("#accountAvatarRemove").classList.add("hidden");
+}
+
+function drawAccountAvatarCrop() {
+  const canvas = $("#accountAvatarCropCanvas");
+  const image = accountAvatarSourceImage;
+  if (!canvas || !image) return;
+  const ctx = canvas.getContext("2d");
+  const size = canvas.width;
+  const zoom = Number($("#accountAvatarZoom").value || 100) / 100;
+  const panX = Number($("#accountAvatarPanX").value || 0) / 100;
+  const panY = Number($("#accountAvatarPanY").value || 0) / 100;
+  const baseScale = Math.max(size / image.naturalWidth, size / image.naturalHeight);
+  const scale = baseScale * zoom;
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  const overflowX = Math.max(0, drawWidth - size);
+  const overflowY = Math.max(0, drawHeight - size);
+  const x = (size - drawWidth) / 2 + panX * overflowX / 2;
+  const y = (size - drawHeight) / 2 + panY * overflowY / 2;
+  ctx.clearRect(0,0,size,size);
+  ctx.drawImage(image,x,y,drawWidth,drawHeight);
+}
+
+function exportAccountAvatarImage() {
+  if (!accountAvatarSourceImage) return "";
+  drawAccountAvatarCrop();
+  const source = $("#accountAvatarCropCanvas");
+  const output = document.createElement("canvas");
+  output.width = 192; output.height = 192;
+  output.getContext("2d").drawImage(source,0,0,192,192);
+  try { return output.toDataURL("image/webp",0.84); }
+  catch { return output.toDataURL("image/jpeg",0.84); }
+}
+
+function chooseAccountAvatarImage() { $("#accountAvatarFile")?.click(); }
+
+function loadAccountAvatarFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) { toast("画像ファイルを選んでね。"); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const image = new Image();
+    image.onload = () => {
+      accountAvatarSourceImage = image;
+      $("#accountAvatarZoom").value = "100"; $("#accountAvatarPanX").value = "0"; $("#accountAvatarPanY").value = "0";
+      $("#accountAvatarCropCanvas").classList.remove("hidden");
+      $("#accountAvatarCropEmpty").classList.add("hidden");
+      $("#accountAvatarAdjustments").classList.remove("hidden");
+      $("#accountAvatarRemove").classList.remove("hidden");
+      drawAccountAvatarCrop();
+      updateAccountCreatePreview();
+    };
+    image.src = String(reader.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeAccountAvatarImage() { resetAccountAvatarEditor(); updateAccountCreatePreview(); }
 
 async function createAccount() {
   const nameInput = $("#accountCreateName");
@@ -2727,15 +2824,18 @@ async function createAccount() {
     id: uid("account"),
     name: name.slice(0, 24),
     handle,
-    avatar: (avatarInput.value.trim() || "✦").slice(0, 4)
+    avatar: (avatarInput.value.trim() || "✦").slice(0, 4),
+    avatarImage: exportAccountAvatarImage()
   };
   accounts.push(account);
   saveAccounts();
   activeAccountId = account.id;
   saveActiveAccountId();
+  if (!$("#fragmentModal")?.classList.contains("hidden")) populatePostAccountSelect(account.id);
   nameInput.value = "";
   handleInput.value = "";
   avatarInput.value = "";
+  resetAccountAvatarEditor();
   renderAll();
   renderSettingsControls();
   updateAccountCreatePreview();
@@ -2768,8 +2868,17 @@ function updateAccountCreatePreview() {
   const name = $("#accountCreateName")?.value.trim() || "新しいアカウント";
   const rawHandle = $("#accountCreateHandle")?.value.trim();
   const handle = rawHandle ? sanitizeHandle(rawHandle) : "handle";
-  if ($("#accountCreateAvatarPreview")) $("#accountCreateAvatarPreview").textContent = avatar.slice(0, 4);
-  if ($("#accountCreateNamePreview")) $("#accountCreateNamePreview").textContent = name.slice(0, 24);
+  const preview = $("#accountCreateAvatarPreview");
+  if (preview) {
+    if (accountAvatarSourceImage) {
+      preview.classList.add("has-image");
+      preview.innerHTML = `<img src="${escapeHTML(exportAccountAvatarImage())}" alt="" />`;
+    } else {
+      preview.classList.remove("has-image");
+      preview.textContent = avatar.slice(0,4);
+    }
+  }
+  if ($("#accountCreateNamePreview")) $("#accountCreateNamePreview").textContent = name.slice(0,24);
   if ($("#accountCreateHandlePreview")) $("#accountCreateHandlePreview").textContent = `@${handle}`;
 }
 
@@ -2778,6 +2887,7 @@ function openAccountCreateScreen() {
   $("#accountCreateAvatar").value = "";
   $("#accountCreateName").value = "";
   $("#accountCreateHandle").value = "";
+  resetAccountAvatarEditor();
   updateAccountCreatePreview();
   $("#accountCreateModal").classList.remove("hidden");
   document.body.classList.add("screen-open");
@@ -2795,6 +2905,7 @@ function openAccountSettings() {
 
 function switchView(target) {
   currentView = target;
+  document.body.classList.toggle("timeline-active", target === "timeline");
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.dataset.view === target));
   $$(".nav-item").forEach((item) => item.classList.toggle("is-active", item.dataset.target === target));
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2804,6 +2915,7 @@ function switchView(target) {
     add.setAttribute("aria-label", target === "garden" ? "種を追加する" : "ポストする");
     add.classList.toggle("garden-add", target === "garden");
   }
+  applyTheme();
   if (target === "timeline") renderTimeline();
   if (target === "garden") renderPickedShelf();
   if (target === "search") setTimeout(() => $("#searchInput").focus(), 70);
@@ -2839,10 +2951,6 @@ function bindEventsV6() {
 
   $("#saveFragmentButton").addEventListener("click", saveFragment);
   $("#deleteFragmentButton").addEventListener("click", deleteCurrentFragment);
-  $("#postAccountSelect").addEventListener("change", (event) => {
-    $("#postEditorAvatar").textContent = accountById(event.target.value).avatar;
-  });
-
   $("#postKeyboardToggle").addEventListener("click", hidePostKeyboard);
   $("#postKindToggle").addEventListener("click", () => togglePostOptionPanel("kind"));
   $("#postTagToggle").addEventListener("click", () => togglePostOptionPanel("tag"));
@@ -2869,10 +2977,17 @@ function bindEventsV6() {
   });
 
   $("#confirmTransferButton").addEventListener("click", confirmTransfer);
-  $("#accountSwitchButton").addEventListener("click", openAccountModal);
+  $("#accountSwitchButton").addEventListener("click", () => openAccountModal("timeline"));
+  $("#postAccountPickerButton").addEventListener("click", () => openAccountModal("post"));
   $("#openAccountSettings").addEventListener("click", openAccountCreateScreen);
   $("#accountCreateSave").addEventListener("click", createAccount);
   $("#closeAccountCreate").addEventListener("click", closeAccountCreateScreen);
+  $("#accountAvatarChoose").addEventListener("click", chooseAccountAvatarImage);
+  $("#accountAvatarFile").addEventListener("change", loadAccountAvatarFile);
+  $("#accountAvatarRemove").addEventListener("click", removeAccountAvatarImage);
+  [$("#accountAvatarZoom"), $("#accountAvatarPanX"), $("#accountAvatarPanY")].forEach((input) => {
+    input.addEventListener("input", () => { drawAccountAvatarCrop(); updateAccountCreatePreview(); });
+  });
   [$("#accountCreateAvatar"), $("#accountCreateName"), $("#accountCreateHandle")].forEach((input) => {
     input.addEventListener("input", updateAccountCreatePreview);
   });
