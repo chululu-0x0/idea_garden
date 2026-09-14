@@ -12,7 +12,7 @@
     local("Mamelon"),
     local("マメロン"),
     url("assets/fonts/Mamelon.woff2") format("woff2"),
-    url("assets/fonts/Mamelon.otf") format("opentype");
+    url("assets/fonts/Mamelon-3-Hi-Regular.otf") format("opentype");
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
