@@ -3407,3 +3407,100 @@ html[data-accent="amber"] .timeline-topbar #activeAccountAvatar{border-color:rgb
 .post-account-picker{appearance:none;-webkit-appearance:none;border:0;padding:0;background:transparent}
 .avatar-image-editor{margin-top:15px;padding:13px;border:1px solid var(--divider);border-radius:10px;background:var(--panel-2)}.avatar-crop-shell{width:156px;height:156px;margin:0 auto;overflow:hidden;border:3px solid var(--accent);border-radius:50%;background:#fff}#accountAvatarCropCanvas,.avatar-crop-empty{display:block;width:100%;height:100%}.avatar-crop-empty{display:grid;place-items:center;color:var(--accent-strong);font-size:42px;font-weight:700}.avatar-image-actions{display:flex;justify-content:center;gap:8px;margin-top:11px}.avatar-image-actions button{min-height:38px;padding-inline:13px}.avatar-adjustments{display:grid;gap:8px;margin-top:12px}.avatar-adjustments label{display:grid;grid-template-columns:38px minmax(0,1fr);align-items:center;gap:9px;margin:0;color:var(--subtext);font-size:9px}.avatar-adjustments input[type="range"]{width:100%;min-height:30px;padding:0;accent-color:var(--accent)}.field-note{display:block;margin-top:4px;color:var(--subtext);font-size:8px}#accountCreateModal{z-index:120}
 @media(max-width:420px){.timeline-list{padding-inline:4px;gap:7px}.timeline-view .post-card{grid-template-columns:54px minmax(0,1fr);gap:9px;border-radius:9px;padding-inline:9px}.timeline-view .post-card .account-avatar{width:50px;height:50px;flex-basis:50px}.timeline-topbar #activeAccountAvatar{width:46px;height:46px;flex-basis:46px}}
+
+
+/* =========================================================
+   v6.8 — account add screen: iOS keyboard behavior lab
+   ========================================================= */
+
+.input-lab {
+  margin: 0 0 14px;
+  padding: 11px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.input-lab-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.input-lab-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.input-lab-head small {
+  color: var(--subtext);
+  font-size: 8px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.input-lab-head strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+#inputLabStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--accent-strong);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.input-lab-modes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.input-lab-modes button {
+  min-width: 0;
+  min-height: 37px;
+  padding: 5px 4px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--subtext);
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.input-lab-modes button.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.input-lab-description {
+  min-height: 2.7em;
+  margin: 8px 1px 0;
+  color: var(--subtext);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+/* Inputs under test should not animate when the transform workaround runs. */
+.account-test-field {
+  scroll-margin: 0 !important;
+  overflow-anchor: none;
+}
+
+@media (max-width: 360px) {
+  .input-lab-modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

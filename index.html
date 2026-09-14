@@ -13,7 +13,7 @@
   <div class="top-status-fade" aria-hidden="true"></div>
 
   <div class="app-shell">
-    <div class="version-badge">v6.7</div>
+    <div class="version-badge">v6.8</div>
 
     <main class="main" id="main">
       <!-- TIMELINE -->
@@ -380,6 +380,27 @@
       <button class="fullscreen-save" id="accountCreateSave" type="button">追加</button>
     </header>
     <div class="fullscreen-editor-body account-create-screen">
+      <section class="input-lab" aria-labelledby="inputLabTitle">
+        <div class="input-lab-head">
+          <div>
+            <small>iOS input test</small>
+            <strong id="inputLabTitle">入力挙動テスト</strong>
+          </div>
+          <span id="inputLabStatus">標準</span>
+        </div>
+
+        <div class="input-lab-modes" role="radiogroup" aria-label="入力挙動テスト">
+          <button type="button" class="is-selected" data-input-lab-mode="standard" role="radio" aria-checked="true">標準</button>
+          <button type="button" data-input-lab-mode="nav" role="radio" aria-checked="false">矢印対策</button>
+          <button type="button" data-input-lab-mode="scroll" role="radio" aria-checked="false">移動対策</button>
+          <button type="button" data-input-lab-mode="both" role="radio" aria-checked="false">両方</button>
+        </div>
+
+        <p class="input-lab-description" id="inputLabDescription">
+          iOS標準の入力挙動。そのまま上下移動と矢印バーを確認できます。
+        </p>
+      </section>
+
       <div class="account-create-preview">
         <span class="account-avatar account-create-avatar" id="accountCreateAvatarPreview">✦</span>
         <div>
@@ -408,14 +429,14 @@
       </section>
 
       <label>文字アイコン
-        <input id="accountCreateAvatar" type="text" maxlength="4" placeholder="✦" />
+        <input id="accountCreateAvatar" class="account-test-field" type="text" maxlength="4" placeholder="✦" inputmode="text" enterkeyhint="next" />
         <small class="field-note">画像を選ばない場合はこちらを使います。</small>
       </label>
       <label>アカウント名
-        <input id="accountCreateName" type="text" maxlength="24" placeholder="例：紅い魔女" />
+        <input id="accountCreateName" class="account-test-field" type="text" maxlength="24" placeholder="例：紅い魔女" inputmode="text" enterkeyhint="next" />
       </label>
       <label>ユーザー名
-        <div class="handle-input-wrap"><span>@</span><input id="accountCreateHandle" type="text" maxlength="24" placeholder="akaimajo" /></div>
+        <div class="handle-input-wrap"><span>@</span><input id="accountCreateHandle" class="account-test-field" type="text" maxlength="24" placeholder="akaimajo" inputmode="text" enterkeyhint="done" /></div>
       </label>
       <p class="account-create-note">作品別でも、用途別でも。あとから投稿先を切り替えられます。</p>
     </div>

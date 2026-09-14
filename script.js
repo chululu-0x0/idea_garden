@@ -1,4 +1,4 @@
-const APP_VERSION = "6.7";
+const APP_VERSION = "6.8";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -2432,6 +2432,10 @@ function refocusPostWithoutViewportMove(event) {
 function keepFullscreenFocusMovementMinimal(target) {
   if (!(target instanceof HTMLElement)) return;
 
+  // The account-add screen has its own A/B input experiment. Do not apply the
+  // generic focus correction there, otherwise the test results get mixed.
+  if (target.matches?.(".account-test-field")) return;
+
   // The large post textarea intentionally stays exactly where the user left it.
   // Trying to make its entire bottom edge visible causes iOS to push the editor upward.
   if (target.id === "fragmentText") return;
@@ -2882,6 +2886,179 @@ function updateAccountCreatePreview() {
   if ($("#accountCreateHandlePreview")) $("#accountCreateHandlePreview").textContent = `@${handle}`;
 }
 
+
+let accountInputLabMode = "standard";
+let accountInputLabScrollTop = 0;
+let accountInputLabGuardUntil = 0;
+let accountInputLabActiveField = null;
+
+function accountInputLabFields() {
+  return $$(".account-test-field");
+}
+
+function accountInputLabUsesNavSuppression() {
+  return accountInputLabMode === "nav" || accountInputLabMode === "both";
+}
+
+function accountInputLabUsesScrollSuppression() {
+  return accountInputLabMode === "scroll" || accountInputLabMode === "both";
+}
+
+function releaseAccountInputLabReadonly() {
+  accountInputLabFields().forEach((field) => {
+    field.readOnly = false;
+  });
+}
+
+function applyAccountInputLabMode(mode = accountInputLabMode) {
+  accountInputLabMode = ["standard", "nav", "scroll", "both"].includes(mode) ? mode : "standard";
+  releaseAccountInputLabReadonly();
+
+  const navMode = accountInputLabUsesNavSuppression();
+
+  accountInputLabFields().forEach((field) => {
+    if (navMode) {
+      // Older Mobile Safari workarounds use tabindex=-1 and remove other
+      // fields from the editable sequence while one input is active.
+      field.setAttribute("tabindex", "-1");
+      field.setAttribute("autocomplete", "off");
+      field.setAttribute("autocorrect", "off");
+      field.setAttribute("autocapitalize", "none");
+      field.setAttribute("spellcheck", "false");
+    } else {
+      field.removeAttribute("tabindex");
+      field.removeAttribute("autocomplete");
+      field.removeAttribute("autocorrect");
+      field.removeAttribute("autocapitalize");
+      field.removeAttribute("spellcheck");
+    }
+  });
+
+  $$("[data-input-lab-mode]").forEach((button) => {
+    const selected = button.dataset.inputLabMode === accountInputLabMode;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", String(selected));
+  });
+
+  const labels = {
+    standard: "標準",
+    nav: "矢印対策",
+    scroll: "移動対策",
+    both: "両方"
+  };
+  const descriptions = {
+    standard: "iOS標準の入力挙動。そのまま上下移動と矢印バーを確認できます。",
+    nav: "tabindex=-1＋他の入力欄を一時的に読み取り専用にして、前へ／次への対象を減らす実験です。",
+    scroll: "タップ直前に入力欄を一瞬だけ画面外へ移してfocusし、Safariの自動スクロールを避ける古典的な回避策です。",
+    both: "矢印対策と画面移動対策を同時に適用します。最も強い実験モードです。"
+  };
+
+  if ($("#inputLabStatus")) $("#inputLabStatus").textContent = labels[accountInputLabMode];
+  if ($("#inputLabDescription")) $("#inputLabDescription").textContent = descriptions[accountInputLabMode];
+}
+
+function lockAccountInputLabSiblings(activeField) {
+  if (!accountInputLabUsesNavSuppression()) return;
+  accountInputLabFields().forEach((field) => {
+    field.readOnly = field !== activeField;
+  });
+}
+
+function handleAccountInputLabTouchStart(event) {
+  const field = event.currentTarget;
+  if (!(field instanceof HTMLInputElement)) return;
+
+  if (accountInputLabUsesNavSuppression()) {
+    // Ensure the tapped field itself is editable before focus.
+    releaseAccountInputLabReadonly();
+    field.readOnly = false;
+  }
+
+  if (!accountInputLabUsesScrollSuppression()) return;
+  if (document.activeElement === field) return;
+
+  const scroller = $("#accountCreateModal .fullscreen-editor-body");
+  accountInputLabScrollTop = scroller?.scrollTop || 0;
+  accountInputLabGuardUntil = performance.now() + 650;
+  accountInputLabActiveField = field;
+
+  if (event.cancelable) event.preventDefault();
+  event.stopPropagation();
+
+  const oldTransform = field.style.transform;
+  const oldTransition = field.style.transition;
+
+  // Community Safari workaround: focus while the field is translated far away,
+  // then restore it after Safari has decided whether it needs to scroll.
+  field.style.transition = "none";
+  field.style.transform = "translateY(-10000px)";
+
+  try {
+    field.focus({ preventScroll: true });
+  } catch {
+    field.focus();
+  }
+
+  setTimeout(() => {
+    field.style.transform = oldTransform;
+    field.style.transition = oldTransition;
+    if (scroller) scroller.scrollTop = accountInputLabScrollTop;
+  }, 100);
+}
+
+function restoreAccountInputLabScroll() {
+  if (!accountInputLabUsesScrollSuppression()) return;
+  if (performance.now() > accountInputLabGuardUntil) return;
+
+  const scroller = $("#accountCreateModal .fullscreen-editor-body");
+  if (scroller && Math.abs(scroller.scrollTop - accountInputLabScrollTop) > 1) {
+    scroller.scrollTop = accountInputLabScrollTop;
+  }
+}
+
+function bindAccountInputLab() {
+  $$("[data-input-lab-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (document.activeElement?.matches?.(".account-test-field")) {
+        document.activeElement.blur();
+      }
+      applyAccountInputLabMode(button.dataset.inputLabMode);
+    });
+  });
+
+  accountInputLabFields().forEach((field) => {
+    field.addEventListener("touchstart", handleAccountInputLabTouchStart, { passive: false });
+
+    field.addEventListener("focus", () => {
+      accountInputLabActiveField = field;
+      lockAccountInputLabSiblings(field);
+      if (accountInputLabUsesScrollSuppression()) {
+        const scroller = $("#accountCreateModal .fullscreen-editor-body");
+        accountInputLabScrollTop = scroller?.scrollTop || 0;
+        accountInputLabGuardUntil = performance.now() + 650;
+      }
+    });
+
+    field.addEventListener("blur", () => {
+      // Delay slightly so a direct tap to another field can become the next active field.
+      setTimeout(() => {
+        if (!document.activeElement?.matches?.(".account-test-field")) {
+          releaseAccountInputLabReadonly();
+        }
+      }, 0);
+    });
+  });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", () => {
+      requestAnimationFrame(restoreAccountInputLabScroll);
+    });
+    window.visualViewport.addEventListener("scroll", () => {
+      requestAnimationFrame(restoreAccountInputLabScroll);
+    });
+  }
+}
+
 function openAccountCreateScreen() {
   closeModal("accountModal");
   $("#accountCreateAvatar").value = "";
@@ -2889,12 +3066,16 @@ function openAccountCreateScreen() {
   $("#accountCreateHandle").value = "";
   resetAccountAvatarEditor();
   updateAccountCreatePreview();
+  releaseAccountInputLabReadonly();
+  applyAccountInputLabMode(accountInputLabMode);
   $("#accountCreateModal").classList.remove("hidden");
   document.body.classList.add("screen-open");
-  setTimeout(() => $("#accountCreateName").focus(), 80);
+  // No autofocus here: this page is intentionally used to compare tap/focus behavior.
 }
 
 function closeAccountCreateScreen() {
+  releaseAccountInputLabReadonly();
+  accountInputLabActiveField = null;
   $("#accountCreateModal").classList.add("hidden");
   document.body.classList.remove("screen-open");
 }
@@ -3111,6 +3292,8 @@ async function initV6() {
   buildCategoryPickers();
   bindEventsV6();
   bindEditorViewportBehavior();
+  bindAccountInputLab();
+  applyAccountInputLabMode("standard");
   applyTheme();
   renderTimelineProfile();
 
