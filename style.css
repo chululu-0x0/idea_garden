@@ -3406,32 +3406,47 @@ html[data-accent="amber"] .timeline-topbar #activeAccountAvatar{border-color:rgb
 
 
 /* =========================================================
-   v6.9 — account input focus behavior
-   Do not center focused fields. Reveal only the hidden part.
+   v6.11 — native focus + stable keyboard dismissal
    ========================================================= */
 
-.account-entry-field {
-  scroll-margin: 0 !important;
-  overflow-anchor: none;
-  transition: none !important;
+/* Match the rubber-band / status-bar background to the surface that is open. */
+html.timeline-active {
+  background: var(--accent);
 }
 
-#accountCreateModal .fullscreen-editor-body {
-  scroll-behavior: auto !important;
-  overscroll-behavior: contain;
-  overflow-anchor: none;
+html.account-screen-open {
+  background: var(--app-bg) !important;
 }
 
-#accountCreateModal .fullscreen-editor-head {
-  position: relative;
-  z-index: 2;
+/* Timeline header reaches through the safe area all the way to the screen edge. */
+.timeline-topbar {
+  top: 0 !important;
+  min-height: calc(58px + env(safe-area-inset-top)) !important;
+  margin-top: calc(-1 * env(safe-area-inset-top));
+  padding-top: calc(5px + env(safe-area-inset-top)) !important;
+  background: var(--accent) !important;
 }
 
+.timeline-tabs {
+  top: calc(58px + env(safe-area-inset-top)) !important;
+}
 
-/* =========================================================
-   v6.10 — account screen scroll + conditional keyboard reveal
-   ========================================================= */
+/* A solid cap prevents the scrolled timeline from peeking above the header
+   during iOS rubber-band overscroll. */
+.timeline-topbar::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: calc(-1 * env(safe-area-inset-top) - 24px);
+  right: 0;
+  left: 0;
+  height: calc(env(safe-area-inset-top) + 28px);
+  background: var(--accent);
+  pointer-events: none;
+}
 
+/* Account creation returns to normal Safari focusing/scrolling.
+   The whole page remains a native-feeling vertical scroller. */
 #accountCreateModal.fullscreen-page {
   display: block;
   overflow-y: auto !important;
@@ -3440,7 +3455,7 @@ html[data-accent="amber"] .timeline-topbar #activeAccountAvatar{border-color:rgb
   overscroll-behavior-y: contain;
   touch-action: pan-y;
   scroll-behavior: auto !important;
-  padding-top: env(safe-area-inset-top);
+  padding-top: 0 !important;
   background: var(--app-bg);
 }
 
@@ -3448,25 +3463,40 @@ html[data-accent="amber"] .timeline-topbar #activeAccountAvatar{border-color:rgb
   display: none !important;
 }
 
+/* Header itself owns the safe-area space, so its background reaches the
+   physical top edge instead of starting below it. */
 #accountCreateModal .fullscreen-editor-head {
   position: sticky !important;
-  top: 0;
-  z-index: 20;
-  min-height: 49px;
-  background: color-mix(in srgb, var(--app-bg) 96%, transparent);
-  backdrop-filter: blur(15px);
+  top: 0 !important;
+  z-index: 30;
+  min-height: calc(49px + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  background: var(--app-bg);
+  border-bottom: 1px solid var(--divider);
+  backdrop-filter: none;
+}
+
+#accountCreateModal .fullscreen-editor-head::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -24px;
+  right: 0;
+  left: 0;
+  height: calc(env(safe-area-inset-top) + 28px);
+  background: var(--app-bg);
+  pointer-events: none;
 }
 
 #accountCreateModal .fullscreen-editor-body {
   min-height: auto;
   overflow: visible !important;
-  overscroll-behavior: auto;
   touch-action: pan-y;
   padding-bottom:
     calc(
       32px +
       env(safe-area-inset-bottom) +
-      var(--account-keyboard-inset, 0px)
+      var(--account-dismiss-reserve, 0px)
     ) !important;
 }
 
@@ -3475,12 +3505,9 @@ html[data-accent="amber"] .timeline-topbar #activeAccountAvatar{border-color:rgb
   margin: 0 auto;
 }
 
-#accountCreateModal .account-create-note {
-  margin-bottom: 64px;
-}
-
+/* No focus hacks here. These inputs now use normal iOS focus behavior. */
 .account-entry-field {
-  scroll-margin: 0 !important;
-  overflow-anchor: none;
-  transition: none !important;
+  scroll-margin: initial !important;
+  overflow-anchor: auto;
+  transition: initial !important;
 }
