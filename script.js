@@ -1,4 +1,4 @@
-const APP_VERSION = "6.8";
+const APP_VERSION = "6.9";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -2434,7 +2434,7 @@ function keepFullscreenFocusMovementMinimal(target) {
 
   // The account-add screen has its own A/B input experiment. Do not apply the
   // generic focus correction there, otherwise the test results get mixed.
-  if (target.matches?.(".account-test-field")) return;
+  if (target.matches?.(".account-entry-field")) return;
 
   // The large post textarea intentionally stays exactly where the user left it.
   // Trying to make its entire bottom edge visible causes iOS to push the editor upward.
@@ -2887,100 +2887,84 @@ function updateAccountCreatePreview() {
 }
 
 
-let accountInputLabMode = "standard";
-let accountInputLabScrollTop = 0;
-let accountInputLabGuardUntil = 0;
-let accountInputLabActiveField = null;
 
-function accountInputLabFields() {
-  return $$(".account-test-field");
+let accountFocusActiveField = null;
+let accountFocusStartScrollTop = 0;
+let accountFocusGuardUntil = 0;
+let accountRevealTimer = 0;
+let accountFocusCameFromDirectTap = false;
+
+function accountEntryFields() {
+  return $$(".account-entry-field");
 }
 
-function accountInputLabUsesNavSuppression() {
-  return accountInputLabMode === "nav" || accountInputLabMode === "both";
+function accountEntryScroller() {
+  return $("#accountCreateModal .fullscreen-editor-body");
 }
 
-function accountInputLabUsesScrollSuppression() {
-  return accountInputLabMode === "scroll" || accountInputLabMode === "both";
+function accountModalIsOpen() {
+  return !$("#accountCreateModal")?.classList.contains("hidden");
 }
 
-function releaseAccountInputLabReadonly() {
-  accountInputLabFields().forEach((field) => {
-    field.readOnly = false;
-  });
+function restoreAccountEntryScrollWhileKeyboardAnimates() {
+  if (!accountModalIsOpen()) return;
+  if (performance.now() > accountFocusGuardUntil) return;
+
+  const scroller = accountEntryScroller();
+  if (!scroller) return;
+
+  if (Math.abs(scroller.scrollTop - accountFocusStartScrollTop) > 1) {
+    scroller.scrollTop = accountFocusStartScrollTop;
+  }
 }
 
-function applyAccountInputLabMode(mode = accountInputLabMode) {
-  accountInputLabMode = ["standard", "nav", "scroll", "both"].includes(mode) ? mode : "standard";
-  releaseAccountInputLabReadonly();
+function revealAccountFieldMinimally(field = accountFocusActiveField) {
+  if (!(field instanceof HTMLElement) || !accountModalIsOpen()) return;
 
-  const navMode = accountInputLabUsesNavSuppression();
+  const scroller = accountEntryScroller();
+  if (!scroller) return;
 
-  accountInputLabFields().forEach((field) => {
-    if (navMode) {
-      // Older Mobile Safari workarounds use tabindex=-1 and remove other
-      // fields from the editable sequence while one input is active.
-      field.setAttribute("tabindex", "-1");
-      field.setAttribute("autocomplete", "off");
-      field.setAttribute("autocorrect", "off");
-      field.setAttribute("autocapitalize", "none");
-      field.setAttribute("spellcheck", "false");
-    } else {
-      field.removeAttribute("tabindex");
-      field.removeAttribute("autocomplete");
-      field.removeAttribute("autocorrect");
-      field.removeAttribute("autocapitalize");
-      field.removeAttribute("spellcheck");
-    }
-  });
+  const viewport = window.visualViewport;
+  const viewportTop = viewport?.offsetTop || 0;
+  const viewportBottom = viewportTop + (viewport?.height || window.innerHeight);
 
-  $$("[data-input-lab-mode]").forEach((button) => {
-    const selected = button.dataset.inputLabMode === accountInputLabMode;
-    button.classList.toggle("is-selected", selected);
-    button.setAttribute("aria-checked", String(selected));
-  });
+  const fieldRect = field.getBoundingClientRect();
+  const scrollerRect = scroller.getBoundingClientRect();
 
-  const labels = {
-    standard: "標準",
-    nav: "矢印対策",
-    scroll: "移動対策",
-    both: "両方"
-  };
-  const descriptions = {
-    standard: "iOS標準の入力挙動。そのまま上下移動と矢印バーを確認できます。",
-    nav: "tabindex=-1＋他の入力欄を一時的に読み取り専用にして、前へ／次への対象を減らす実験です。",
-    scroll: "タップ直前に入力欄を一瞬だけ画面外へ移してfocusし、Safariの自動スクロールを避ける古典的な回避策です。",
-    both: "矢印対策と画面移動対策を同時に適用します。最も強い実験モードです。"
-  };
+  // Keep only a small breathing space around the active field.
+  // Never center it.
+  const safeTop = Math.max(scrollerRect.top + 10, viewportTop + 8);
+  const safeBottom = Math.min(scrollerRect.bottom - 10, viewportBottom - 12);
 
-  if ($("#inputLabStatus")) $("#inputLabStatus").textContent = labels[accountInputLabMode];
-  if ($("#inputLabDescription")) $("#inputLabDescription").textContent = descriptions[accountInputLabMode];
+  if (safeBottom <= safeTop) return;
+
+  if (fieldRect.bottom > safeBottom) {
+    const delta = fieldRect.bottom - safeBottom + 8;
+    scroller.scrollTop += Math.max(0, delta);
+  } else if (fieldRect.top < safeTop) {
+    const delta = safeTop - fieldRect.top + 8;
+    scroller.scrollTop -= Math.max(0, delta);
+  }
 }
 
-function lockAccountInputLabSiblings(activeField) {
-  if (!accountInputLabUsesNavSuppression()) return;
-  accountInputLabFields().forEach((field) => {
-    field.readOnly = field !== activeField;
-  });
+function scheduleAccountMinimalReveal(delay = 130) {
+  clearTimeout(accountRevealTimer);
+  accountRevealTimer = window.setTimeout(() => {
+    accountFocusGuardUntil = 0;
+    revealAccountFieldMinimally();
+  }, delay);
 }
 
-function handleAccountInputLabTouchStart(event) {
+function focusAccountFieldWithoutSafariJump(event) {
   const field = event.currentTarget;
   if (!(field instanceof HTMLInputElement)) return;
-
-  if (accountInputLabUsesNavSuppression()) {
-    // Ensure the tapped field itself is editable before focus.
-    releaseAccountInputLabReadonly();
-    field.readOnly = false;
-  }
-
-  if (!accountInputLabUsesScrollSuppression()) return;
   if (document.activeElement === field) return;
 
-  const scroller = $("#accountCreateModal .fullscreen-editor-body");
-  accountInputLabScrollTop = scroller?.scrollTop || 0;
-  accountInputLabGuardUntil = performance.now() + 650;
-  accountInputLabActiveField = field;
+  const scroller = accountEntryScroller();
+  accountFocusActiveField = field;
+  accountFocusStartScrollTop = scroller?.scrollTop || 0;
+  accountFocusGuardUntil = performance.now() + 520;
+  accountFocusCameFromDirectTap = true;
 
   if (event.cancelable) event.preventDefault();
   event.stopPropagation();
@@ -2988,8 +2972,9 @@ function handleAccountInputLabTouchStart(event) {
   const oldTransform = field.style.transform;
   const oldTransition = field.style.transition;
 
-  // Community Safari workaround: focus while the field is translated far away,
-  // then restore it after Safari has decided whether it needs to scroll.
+  // Mobile Safari workaround:
+  // focus while the input is temporarily outside the visible layout so Safari
+  // does not decide to scroll the whole editor toward it.
   field.style.transition = "none";
   field.style.transform = "translateY(-10000px)";
 
@@ -2999,63 +2984,65 @@ function handleAccountInputLabTouchStart(event) {
     field.focus();
   }
 
-  setTimeout(() => {
+  window.setTimeout(() => {
     field.style.transform = oldTransform;
     field.style.transition = oldTransition;
-    if (scroller) scroller.scrollTop = accountInputLabScrollTop;
-  }, 100);
+    if (scroller) scroller.scrollTop = accountFocusStartScrollTop;
+    scheduleAccountMinimalReveal(160);
+  }, 90);
 }
 
-function restoreAccountInputLabScroll() {
-  if (!accountInputLabUsesScrollSuppression()) return;
-  if (performance.now() > accountInputLabGuardUntil) return;
+function handleAccountEntryFocus(field) {
+  if (!(field instanceof HTMLInputElement)) return;
 
-  const scroller = $("#accountCreateModal .fullscreen-editor-body");
-  if (scroller && Math.abs(scroller.scrollTop - accountInputLabScrollTop) > 1) {
-    scroller.scrollTop = accountInputLabScrollTop;
-  }
-}
+  const scroller = accountEntryScroller();
+  accountFocusActiveField = field;
 
-function bindAccountInputLab() {
-  $$("[data-input-lab-mode]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (document.activeElement?.matches?.(".account-test-field")) {
-        document.activeElement.blur();
-      }
-      applyAccountInputLabMode(button.dataset.inputLabMode);
+  // When focus came from iOS Previous / Next instead of a direct tap, capture
+  // the current position immediately and undo any excess internal jump before
+  // doing the minimum reveal.
+  if (!accountFocusCameFromDirectTap) {
+    const before = scroller?.scrollTop || 0;
+    requestAnimationFrame(() => {
+      if (scroller) scroller.scrollTop = before;
+      scheduleAccountMinimalReveal(120);
     });
-  });
+  }
 
-  accountInputLabFields().forEach((field) => {
-    field.addEventListener("touchstart", handleAccountInputLabTouchStart, { passive: false });
+  accountFocusCameFromDirectTap = false;
+}
+
+function bindAccountEntryFocusBehavior() {
+  accountEntryFields().forEach((field) => {
+    field.addEventListener("touchstart", focusAccountFieldWithoutSafariJump, { passive: false });
 
     field.addEventListener("focus", () => {
-      accountInputLabActiveField = field;
-      lockAccountInputLabSiblings(field);
-      if (accountInputLabUsesScrollSuppression()) {
-        const scroller = $("#accountCreateModal .fullscreen-editor-body");
-        accountInputLabScrollTop = scroller?.scrollTop || 0;
-        accountInputLabGuardUntil = performance.now() + 650;
-      }
+      handleAccountEntryFocus(field);
     });
 
     field.addEventListener("blur", () => {
-      // Delay slightly so a direct tap to another field can become the next active field.
-      setTimeout(() => {
-        if (!document.activeElement?.matches?.(".account-test-field")) {
-          releaseAccountInputLabReadonly();
-        }
-      }, 0);
+      const scroller = accountEntryScroller();
+      accountFocusStartScrollTop = scroller?.scrollTop || 0;
     });
   });
 
+  const onViewportChange = () => {
+    if (!accountModalIsOpen()) return;
+
+    if (performance.now() <= accountFocusGuardUntil) {
+      requestAnimationFrame(restoreAccountEntryScrollWhileKeyboardAnimates);
+      scheduleAccountMinimalReveal(170);
+      return;
+    }
+
+    scheduleAccountMinimalReveal(100);
+  };
+
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", () => {
-      requestAnimationFrame(restoreAccountInputLabScroll);
-    });
-    window.visualViewport.addEventListener("scroll", () => {
-      requestAnimationFrame(restoreAccountInputLabScroll);
-    });
+    window.visualViewport.addEventListener("resize", onViewportChange);
+    window.visualViewport.addEventListener("scroll", onViewportChange);
+  } else {
+    window.addEventListener("resize", onViewportChange);
   }
 }
 
@@ -3066,16 +3053,21 @@ function openAccountCreateScreen() {
   $("#accountCreateHandle").value = "";
   resetAccountAvatarEditor();
   updateAccountCreatePreview();
-  releaseAccountInputLabReadonly();
-  applyAccountInputLabMode(accountInputLabMode);
+
+  accountFocusActiveField = null;
+  accountFocusStartScrollTop = 0;
+  accountFocusGuardUntil = 0;
+  accountFocusCameFromDirectTap = false;
+  clearTimeout(accountRevealTimer);
+
   $("#accountCreateModal").classList.remove("hidden");
   document.body.classList.add("screen-open");
-  // No autofocus here: this page is intentionally used to compare tap/focus behavior.
 }
 
 function closeAccountCreateScreen() {
-  releaseAccountInputLabReadonly();
-  accountInputLabActiveField = null;
+  clearTimeout(accountRevealTimer);
+  accountFocusActiveField = null;
+  accountFocusGuardUntil = 0;
   $("#accountCreateModal").classList.add("hidden");
   document.body.classList.remove("screen-open");
 }
@@ -3292,8 +3284,7 @@ async function initV6() {
   buildCategoryPickers();
   bindEventsV6();
   bindEditorViewportBehavior();
-  bindAccountInputLab();
-  applyAccountInputLabMode("standard");
+  bindAccountEntryFocusBehavior();
   applyTheme();
   renderTimelineProfile();
 

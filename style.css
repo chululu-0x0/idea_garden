@@ -12,7 +12,7 @@
     local("Mamelon"),
     local("マメロン"),
     url("assets/fonts/Mamelon.woff2") format("woff2"),
-    url("assets/fonts/Mamelon-3-Hi-Regular.otf") format("opentype");
+    url("assets/fonts/Mamelon.otf") format("opentype");
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
@@ -3410,97 +3410,23 @@ html[data-accent="amber"] .timeline-topbar #activeAccountAvatar{border-color:rgb
 
 
 /* =========================================================
-   v6.8 — account add screen: iOS keyboard behavior lab
+   v6.9 — account input focus behavior
+   Do not center focused fields. Reveal only the hidden part.
    ========================================================= */
 
-.input-lab {
-  margin: 0 0 14px;
-  padding: 11px;
-  border: 1px solid var(--divider);
-  border-radius: 10px;
-  background: var(--panel-2);
-}
-
-.input-lab-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 9px;
-}
-
-.input-lab-head > div {
-  display: grid;
-  gap: 2px;
-}
-
-.input-lab-head small {
-  color: var(--subtext);
-  font-size: 8px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.input-lab-head strong {
-  color: var(--text);
-  font-size: 12px;
-}
-
-#inputLabStatus {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 26px;
-  padding: 4px 8px;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
-  color: var(--accent-strong);
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.input-lab-modes {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 5px;
-}
-
-.input-lab-modes button {
-  min-width: 0;
-  min-height: 37px;
-  padding: 5px 4px;
-  border: 1px solid var(--divider);
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--subtext);
-  font: inherit;
-  font-size: 9px;
-  cursor: pointer;
-}
-
-.input-lab-modes button.is-selected {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
-  color: var(--accent-strong);
-  font-weight: 700;
-}
-
-.input-lab-description {
-  min-height: 2.7em;
-  margin: 8px 1px 0;
-  color: var(--subtext);
-  font-size: 8px;
-  line-height: 1.45;
-}
-
-/* Inputs under test should not animate when the transform workaround runs. */
-.account-test-field {
+.account-entry-field {
   scroll-margin: 0 !important;
+  overflow-anchor: none;
+  transition: none !important;
+}
+
+#accountCreateModal .fullscreen-editor-body {
+  scroll-behavior: auto !important;
+  overscroll-behavior: contain;
   overflow-anchor: none;
 }
 
-@media (max-width: 360px) {
-  .input-lab-modes {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+#accountCreateModal .fullscreen-editor-head {
+  position: relative;
+  z-index: 2;
 }
