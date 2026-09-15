@@ -1,20 +1,16 @@
 
 /* ---------------------------------------------------------
    Font
-   Exact Mamelon will be used automatically when either:
-   1) Mamelon is installed on the device, or
-   2) assets/fonts/Mamelon.woff2 (or Mamelon.otf) is added.
-   Until then, the app falls back to a rounded Japanese UI font.
+   Mamelon 3.5 Hi Regular
    --------------------------------------------------------- */
 @font-face {
   font-family: "Mamelon";
   src:
     local("Mamelon"),
     local("マメロン"),
-    url("assets/fonts/Mamelon.woff2") format("woff2"),
-    url("assets/fonts/Mamelon.otf") format("opentype");
+    url("assets/fonts/Mamelon-3.5-Hi-Regular.otf") format("opentype");
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 400;
   font-display: swap;
 }
 
@@ -3429,4 +3425,62 @@ html[data-accent="amber"] .timeline-topbar #activeAccountAvatar{border-color:rgb
 #accountCreateModal .fullscreen-editor-head {
   position: relative;
   z-index: 2;
+}
+
+
+/* =========================================================
+   v6.10 — account screen scroll + conditional keyboard reveal
+   ========================================================= */
+
+#accountCreateModal.fullscreen-page {
+  display: block;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  scroll-behavior: auto !important;
+  padding-top: env(safe-area-inset-top);
+  background: var(--app-bg);
+}
+
+#accountCreateModal.hidden {
+  display: none !important;
+}
+
+#accountCreateModal .fullscreen-editor-head {
+  position: sticky !important;
+  top: 0;
+  z-index: 20;
+  min-height: 49px;
+  background: color-mix(in srgb, var(--app-bg) 96%, transparent);
+  backdrop-filter: blur(15px);
+}
+
+#accountCreateModal .fullscreen-editor-body {
+  min-height: auto;
+  overflow: visible !important;
+  overscroll-behavior: auto;
+  touch-action: pan-y;
+  padding-bottom:
+    calc(
+      32px +
+      env(safe-area-inset-bottom) +
+      var(--account-keyboard-inset, 0px)
+    ) !important;
+}
+
+#accountCreateModal .account-create-screen {
+  width: min(100%, 620px);
+  margin: 0 auto;
+}
+
+#accountCreateModal .account-create-note {
+  margin-bottom: 64px;
+}
+
+.account-entry-field {
+  scroll-margin: 0 !important;
+  overflow-anchor: none;
+  transition: none !important;
 }
