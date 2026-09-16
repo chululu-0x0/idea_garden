@@ -1,4 +1,4 @@
-const APP_VERSION = "6.11";
+const APP_VERSION = "6.12";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -2891,10 +2891,16 @@ function updateAccountCreatePreview() {
 
 
 
+
 let accountFocusActiveField = null;
 let accountBaseViewportHeight = 0;
 let accountKeyboardOpen = false;
 let accountKeyboardHeight = 0;
+
+let accountPlacementTimer = 0;
+let accountPlacementPending = false;
+let accountFocusScrollTop = 0;
+
 let accountDismissScrollTop = 0;
 let accountDismissLockUntil = 0;
 let accountDismissTimers = [];
@@ -2911,9 +2917,106 @@ function accountModalIsOpen() {
   return !$("#accountCreateModal")?.classList.contains("hidden");
 }
 
+function clearAccountPlacementTimer() {
+  clearTimeout(accountPlacementTimer);
+  accountPlacementTimer = 0;
+}
+
 function clearAccountDismissTimers() {
   accountDismissTimers.forEach((timer) => clearTimeout(timer));
   accountDismissTimers = [];
+}
+
+function updateAccountKeyboardReserve() {
+  const modal = accountEntryScroller();
+  if (!modal) return;
+
+  const reserve = accountKeyboardOpen
+    ? Math.max(0, accountKeyboardHeight + 32)
+    : Math.max(0, accountKeyboardHeight);
+
+  modal.style.setProperty("--account-keyboard-reserve", `${Math.round(reserve)}px`);
+}
+
+function placeAccountFieldAboveKeyboard(field = accountFocusActiveField) {
+  if (!(field instanceof HTMLElement) || !accountModalIsOpen()) return;
+  if (!accountKeyboardOpen) return;
+
+  const scroller = accountEntryScroller();
+  const viewport = window.visualViewport;
+  if (!scroller || !viewport) return;
+
+  const rect = field.getBoundingClientRect();
+
+  // Put the bottom of the tapped input a little above the keyboard.
+  // This is deliberately a single simple target instead of Safari's
+  // automatic "center the focused field" behavior.
+  const targetBottom = viewport.offsetTop + viewport.height - 18;
+  const delta = rect.bottom - targetBottom;
+
+  // If the input is already very close to the desired line, do not twitch it.
+  if (Math.abs(delta) < 6) return;
+
+  const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  const targetScroll = Math.max(
+    0,
+    Math.min(maxScroll, scroller.scrollTop + delta)
+  );
+
+  scroller.scrollTo({
+    top: targetScroll,
+    behavior: "smooth"
+  });
+}
+
+function scheduleAccountPlacement(delay = 120) {
+  clearAccountPlacementTimer();
+  accountPlacementTimer = window.setTimeout(() => {
+    accountPlacementPending = false;
+    updateAccountKeyboardReserve();
+    placeAccountFieldAboveKeyboard();
+  }, delay);
+}
+
+function focusAccountFieldWithoutSafariScroll(event) {
+  const field = event.currentTarget;
+  if (!(field instanceof HTMLInputElement)) return;
+  if (document.activeElement === field) return;
+
+  const scroller = accountEntryScroller();
+  if (!scroller) return;
+
+  accountFocusActiveField = field;
+  accountFocusScrollTop = scroller.scrollTop;
+  accountPlacementPending = true;
+
+  if (event.cancelable) event.preventDefault();
+  event.stopPropagation();
+
+  const oldTransform = field.style.transform;
+  const oldTransition = field.style.transition;
+
+  // Focus while temporarily outside the visual layout.
+  // This stops Mobile Safari from deciding its own scroll destination.
+  field.style.transition = "none";
+  field.style.transform = "translateY(-10000px)";
+
+  try {
+    field.focus({ preventScroll: true });
+  } catch {
+    field.focus();
+  }
+
+  window.setTimeout(() => {
+    field.style.transform = oldTransform;
+    field.style.transition = oldTransition;
+
+    // Undo any tiny scroll Safari managed during keyboard startup.
+    scroller.scrollTop = accountFocusScrollTop;
+
+    // visualViewport may still be animating, so placement happens after it settles.
+    scheduleAccountPlacement(140);
+  }, 90);
 }
 
 function restoreAccountDismissPosition() {
@@ -2933,18 +3036,18 @@ function holdAccountPositionDuringKeyboardDismiss() {
   if (!scroller) return;
 
   accountDismissScrollTop = scroller.scrollTop;
-  accountDismissLockUntil = performance.now() + 720;
+  accountDismissLockUntil = performance.now() + 700;
 
-  // Keep enough scrollable room after the viewport expands so iOS does not
-  // clamp scrollTop downward merely because the keyboard disappeared.
-  const reserve = Math.max(0, accountKeyboardHeight);
-  scroller.style.setProperty("--account-dismiss-reserve", `${Math.round(reserve)}px`);
+  // Keep the keyboard-height reserve temporarily so the scroll position does
+  // not get clamped just because the visual viewport became tall again.
+  scroller.style.setProperty(
+    "--account-keyboard-reserve",
+    `${Math.round(Math.max(0, accountKeyboardHeight))}px`
+  );
 
   clearAccountDismissTimers();
 
-  // iOS changes visualViewport over several frames. Re-assert the same
-  // scrollTop through that animation, then stop interfering.
-  [0, 30, 70, 130, 220, 360, 560, 700].forEach((delay) => {
+  [0, 30, 70, 130, 220, 360, 540, 680].forEach((delay) => {
     const timer = window.setTimeout(() => {
       requestAnimationFrame(restoreAccountDismissPosition);
     }, delay);
@@ -2954,18 +3057,28 @@ function holdAccountPositionDuringKeyboardDismiss() {
 
 function bindAccountEntryFocusBehavior() {
   accountEntryFields().forEach((field) => {
-    // Focus itself is deliberately untouched: native Safari behavior is used.
+    field.addEventListener(
+      "touchstart",
+      focusAccountFieldWithoutSafariScroll,
+      { passive: false }
+    );
+
     field.addEventListener("focus", () => {
       accountFocusActiveField = field;
+
+      // Keyboard navigation (Previous / Next) does not pass through touchstart.
+      // We cannot stop every native transition there, but once the viewport
+      // settles we still place the new field at our own simple target.
+      if (!accountPlacementPending) {
+        accountPlacementPending = true;
+        scheduleAccountPlacement(130);
+      }
     });
 
     field.addEventListener("blur", () => {
-      // If the keyboard is currently open, preserve the exact page position
-      // before iOS starts expanding the visual viewport.
       if (accountKeyboardOpen) {
         holdAccountPositionDuringKeyboardDismiss();
       }
-      accountFocusActiveField = null;
     });
   });
 
@@ -2985,11 +3098,15 @@ function bindAccountEntryFocusBehavior() {
     accountKeyboardOpen = keyboardHeight > 80;
 
     if (accountKeyboardOpen) {
-      accountKeyboardHeight = Math.max(accountKeyboardHeight, keyboardHeight);
+      accountKeyboardHeight = keyboardHeight;
+      updateAccountKeyboardReserve();
+
+      // Debounce the many resize/scroll events produced by iOS keyboard animation.
+      if (accountPlacementPending && accountFocusActiveField) {
+        scheduleAccountPlacement(100);
+      }
     }
 
-    // Done/checkmark can begin dismissal before blur settles on some iOS
-    // versions, so detect the viewport expanding as a second trigger.
     if (wasOpen && !accountKeyboardOpen) {
       holdAccountPositionDuringKeyboardDismiss();
     }
@@ -3019,11 +3136,15 @@ function openAccountCreateScreen() {
   accountBaseViewportHeight = window.innerHeight;
   accountKeyboardOpen = false;
   accountKeyboardHeight = 0;
+  accountPlacementPending = false;
+  accountFocusScrollTop = 0;
   accountDismissLockUntil = 0;
+
+  clearAccountPlacementTimer();
   clearAccountDismissTimers();
 
   const modal = $("#accountCreateModal");
-  modal.style.setProperty("--account-dismiss-reserve", "0px");
+  modal.style.setProperty("--account-keyboard-reserve", "0px");
   modal.scrollTop = 0;
   modal.classList.remove("hidden");
 
@@ -3032,15 +3153,18 @@ function openAccountCreateScreen() {
 }
 
 function closeAccountCreateScreen() {
+  clearAccountPlacementTimer();
   clearAccountDismissTimers();
+
   accountFocusActiveField = null;
   accountBaseViewportHeight = 0;
   accountKeyboardOpen = false;
   accountKeyboardHeight = 0;
+  accountPlacementPending = false;
   accountDismissLockUntil = 0;
 
   const modal = $("#accountCreateModal");
-  modal.style.setProperty("--account-dismiss-reserve", "0px");
+  modal.style.setProperty("--account-keyboard-reserve", "0px");
   modal.classList.add("hidden");
 
   document.documentElement.classList.remove("account-screen-open");
@@ -3257,6 +3381,8 @@ function bindEditorViewportBehavior() {
 
 async function initV6() {
   $(".version-badge").textContent = `v${APP_VERSION}`;
+  document.body.classList.toggle("timeline-active", currentView === "timeline");
+  document.documentElement.classList.toggle("timeline-active", currentView === "timeline");
   buildCategoryPickers();
   bindEventsV6();
   bindEditorViewportBehavior();

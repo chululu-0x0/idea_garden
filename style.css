@@ -3511,3 +3511,50 @@ html.account-screen-open {
   overflow-anchor: auto;
   transition: initial !important;
 }
+
+
+/* =========================================================
+   v6.12 — solid timeline top + app-controlled input placement
+   ========================================================= */
+
+/* The old status fade caused the white gradient on first launch.
+   Keep the cap, but make it a flat theme-color surface. */
+.top-status-fade {
+  background: transparent !important;
+}
+
+html.timeline-active .top-status-fade,
+body.timeline-active .top-status-fade {
+  height: calc(env(safe-area-inset-top) + 30px) !important;
+  background: var(--accent) !important;
+}
+
+/* The whole overscroll surface also uses the accent immediately on first load. */
+html.timeline-active,
+body.timeline-active {
+  background: var(--accent) !important;
+}
+
+/* Keep the account title/header stationary; only the page body moves. */
+#accountCreateModal .fullscreen-editor-head {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 40;
+}
+
+/* Extra scroll room equal to the keyboard height lets the app place a low
+   field exactly where it wants instead of hitting the end of the page. */
+#accountCreateModal .fullscreen-editor-body {
+  padding-bottom:
+    calc(
+      32px +
+      env(safe-area-inset-bottom) +
+      var(--account-keyboard-reserve, 0px)
+    ) !important;
+}
+
+/* Do not ask the browser for its own scroll target. */
+.account-entry-field {
+  scroll-margin: 0 !important;
+  overflow-anchor: none;
+}
