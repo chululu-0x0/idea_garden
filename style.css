@@ -3557,3 +3557,10 @@ body.timeline-active .main,
   z-index: -1 !important;
   background: var(--accent) !important;
 }
+
+
+/* =========================================================
+   v6.14 — conditional input placement
+   Visible-after-keyboard fields stay in place.
+   Only fields predicted/confirmed to be covered are repositioned.
+   ========================================================= */
