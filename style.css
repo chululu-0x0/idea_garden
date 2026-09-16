@@ -190,19 +190,7 @@ html[data-theme="dark"] .background-stack {
   transition: background-color .8s ease;
 }
 
-.top-status-fade {
-  position: fixed;
-  inset: 0 0 auto;
-  z-index: 24;
-  height: calc(env(safe-area-inset-top) + 46px);
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    var(--status-fade) 0%,
-    color-mix(in srgb, var(--status-fade) 56%, transparent) 48%,
-    transparent 100%
-  );
-}
+
 
 .app-shell {
   position: relative;
@@ -1635,10 +1623,7 @@ body {
 
 .background-stack { display: none !important; }
 
-.top-status-fade {
-  height: calc(env(safe-area-inset-top) + 25px);
-  background: linear-gradient(to bottom, var(--status-fade) 0%, color-mix(in srgb, var(--status-fade) 76%, transparent) 48%, transparent 100%);
-}
+
 
 .version-badge {
   top: calc(env(safe-area-inset-top) + 3px);
@@ -3389,7 +3374,7 @@ body.post-screen-open .app-shell {
    ========================================================= */
 .account-avatar{overflow:hidden}.account-avatar.has-image{padding:0;background:#fff}.account-avatar.has-image img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 body.timeline-active,body.timeline-active .main,.timeline-view{background:var(--accent)}
-body.timeline-active .top-status-fade{background:linear-gradient(to bottom,var(--accent) 0%,color-mix(in srgb,var(--accent) 92%,transparent) 62%,transparent 100%)}
+
 :root{--accent-on:#fff;--accent-on-muted:rgba(255,255,255,.76)}html[data-accent="amber"]{--accent-on:#3d2b12;--accent-on-muted:rgba(61,43,18,.68)}
 .timeline-topbar{top:env(safe-area-inset-top);min-height:58px;padding:5px 9px;border-bottom:0!important;background:var(--accent)!important;backdrop-filter:none!important}
 .timeline-topbar .account-switch-copy strong,.timeline-wordmark,.timeline-search-jump{color:var(--accent-on)}.timeline-topbar .account-switch-copy small,.timeline-topbar .account-chevron{color:var(--accent-on-muted)}
@@ -3517,18 +3502,6 @@ html.account-screen-open {
    v6.12 — solid timeline top + app-controlled input placement
    ========================================================= */
 
-/* The old status fade caused the white gradient on first launch.
-   Keep the cap, but make it a flat theme-color surface. */
-.top-status-fade {
-  background: transparent !important;
-}
-
-html.timeline-active .top-status-fade,
-body.timeline-active .top-status-fade {
-  height: calc(env(safe-area-inset-top) + 30px) !important;
-  background: var(--accent) !important;
-}
-
 /* The whole overscroll surface also uses the accent immediately on first load. */
 html.timeline-active,
 body.timeline-active {
@@ -3557,4 +3530,30 @@ body.timeline-active {
 .account-entry-field {
   scroll-margin: 0 !important;
   overflow-anchor: none;
+}
+
+
+/* =========================================================
+   v6.13 — no status overlay; stable repeated input placement
+   ========================================================= */
+
+/* No overlay sits above the icons/text anymore.
+   The actual timeline surfaces themselves paint the top edge. */
+html.timeline-active,
+body.timeline-active,
+body.timeline-active .main,
+.timeline-view,
+.timeline-topbar,
+.timeline-tabs {
+  background-color: var(--accent) !important;
+}
+
+/* Keep the physical safe-area/top overscroll covered by the header itself. */
+.timeline-topbar {
+  isolation: isolate;
+}
+
+.timeline-topbar::before {
+  z-index: -1 !important;
+  background: var(--accent) !important;
 }
