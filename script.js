@@ -1,4 +1,4 @@
-const APP_VERSION = "6.14";
+const APP_VERSION = "6.15";
 const DB_NAME = "idea_garden_db";
 const DB_VERSION = 2;
 const SETTINGS_KEY = "idea_garden_settings_v3";
@@ -2893,107 +2893,19 @@ function updateAccountCreatePreview() {
 
 
 
+
 let accountFocusActiveField = null;
 let accountBaseViewportHeight = 0;
 let accountKeyboardOpen = false;
 let accountKeyboardHeight = 0;
 
 let accountPlacementTimer = 0;
-let accountPlacementPending = false;
 let accountFocusScrollTop = 0;
+let accountFocusToken = 0;
 
 let accountDismissScrollTop = 0;
 let accountDismissLockUntil = 0;
 let accountDismissTimers = [];
-
-let accountSwitchTargetField = null;
-let accountBlurTimer = 0;
-let accountScrollAnimationFrame = 0;
-let accountScrollAnimationToken = 0;
-
-const ACCOUNT_KEYBOARD_MEMORY_KEY = "ideaGardenKeyboardHeightsV1";
-const ACCOUNT_KEYBOARD_SAFE_MARGIN = 24;
-let accountKeyboardHeights = loadAccountKeyboardHeights();
-let accountFieldNeedsPlacement = true;
-
-
-function accountKeyboardOrientationKey() {
-  return window.innerWidth > window.innerHeight ? "landscape" : "portrait";
-}
-
-function loadAccountKeyboardHeights() {
-  try {
-    const raw = localStorage.getItem(ACCOUNT_KEYBOARD_MEMORY_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return {
-      portrait: Number(parsed.portrait) || 0,
-      landscape: Number(parsed.landscape) || 0
-    };
-  } catch {
-    return { portrait: 0, landscape: 0 };
-  }
-}
-
-function saveAccountKeyboardHeight(height) {
-  const value = Math.round(Number(height) || 0);
-  if (value < 80) return;
-
-  const key = accountKeyboardOrientationKey();
-  accountKeyboardHeights[key] = value;
-
-  try {
-    localStorage.setItem(
-      ACCOUNT_KEYBOARD_MEMORY_KEY,
-      JSON.stringify(accountKeyboardHeights)
-    );
-  } catch {}
-}
-
-function rememberedAccountKeyboardHeight() {
-  return Number(accountKeyboardHeights[accountKeyboardOrientationKey()]) || 0;
-}
-
-function accountVisibleBandForKeyboard(predictedHeight = 0) {
-  const viewport = window.visualViewport;
-  const viewportTop = viewport?.offsetTop || 0;
-  const currentHeight = viewport?.height || window.innerHeight;
-
-  if (accountKeyboardOpen && viewport) {
-    return {
-      top: viewportTop,
-      bottom: viewportTop + currentHeight
-    };
-  }
-
-  // Keyboard is currently hidden. Predict where its top edge will be using
-  // the most recently measured height for this orientation.
-  const fullBottom = viewportTop + currentHeight;
-  return {
-    top: viewportTop,
-    bottom: fullBottom - Math.max(0, predictedHeight)
-  };
-}
-
-function accountFieldWillNeedPlacement(field) {
-  if (!(field instanceof HTMLElement)) return true;
-
-  const predictedHeight = accountKeyboardOpen
-    ? accountKeyboardHeight
-    : rememberedAccountKeyboardHeight();
-
-  // First ever keyboard opening: we don't know its height yet, so keep the
-  // existing safe behavior and place after the real viewport is measured.
-  if (!accountKeyboardOpen && predictedHeight < 80) {
-    return true;
-  }
-
-  const rect = field.getBoundingClientRect();
-  const band = accountVisibleBandForKeyboard(predictedHeight);
-
-  const safeBottom = band.bottom - ACCOUNT_KEYBOARD_SAFE_MARGIN;
-
-  return rect.bottom > safeBottom;
-}
 
 function accountEntryFields() {
   return $$(".account-entry-field");
@@ -3012,167 +2924,85 @@ function clearAccountPlacementTimer() {
   accountPlacementTimer = 0;
 }
 
-function clearAccountBlurTimer() {
-  clearTimeout(accountBlurTimer);
-  accountBlurTimer = 0;
-}
-
 function clearAccountDismissTimers() {
   accountDismissTimers.forEach((timer) => clearTimeout(timer));
   accountDismissTimers = [];
 }
 
-function cancelAccountScrollAnimation() {
-  accountScrollAnimationToken += 1;
-  if (accountScrollAnimationFrame) {
-    cancelAnimationFrame(accountScrollAnimationFrame);
-    accountScrollAnimationFrame = 0;
-  }
-}
-
-function animateAccountScrollTo(targetTop, duration = 150) {
+function updateAccountKeyboardReserve() {
   const scroller = accountEntryScroller();
   if (!scroller) return;
-
-  cancelAccountScrollAnimation();
-
-  const token = accountScrollAnimationToken;
-  const startTop = scroller.scrollTop;
-  const distance = targetTop - startTop;
-
-  if (Math.abs(distance) < 1) {
-    scroller.scrollTop = targetTop;
-    return;
-  }
-
-  const startedAt = performance.now();
-
-  const tick = (now) => {
-    if (token !== accountScrollAnimationToken) return;
-
-    const raw = Math.min(1, (now - startedAt) / duration);
-    // Smooth but short ease-out. This is fully app-controlled and cancellable.
-    const eased = 1 - Math.pow(1 - raw, 3);
-    scroller.scrollTop = startTop + distance * eased;
-
-    if (raw < 1) {
-      accountScrollAnimationFrame = requestAnimationFrame(tick);
-    } else {
-      scroller.scrollTop = targetTop;
-      accountScrollAnimationFrame = 0;
-    }
-  };
-
-  accountScrollAnimationFrame = requestAnimationFrame(tick);
-}
-
-function cancelAccountDismissLock() {
-  accountDismissLockUntil = 0;
-  clearAccountDismissTimers();
-}
-
-function updateAccountKeyboardReserve() {
-  const modal = accountEntryScroller();
-  if (!modal) return;
 
   const reserve = accountKeyboardOpen
     ? Math.max(0, accountKeyboardHeight + 40)
     : Math.max(0, accountKeyboardHeight);
 
-  modal.style.setProperty(
+  scroller.style.setProperty(
     "--account-keyboard-reserve",
     `${Math.round(reserve)}px`
   );
 }
 
-function placeAccountFieldAtTarget(field = accountFocusActiveField) {
-  if (!(field instanceof HTMLElement) || !accountModalIsOpen()) return;
+function placeAccountFieldIfHidden(field = accountFocusActiveField, token = accountFocusToken) {
+  if (!(field instanceof HTMLElement)) return;
+  if (!accountModalIsOpen()) return;
   if (!accountKeyboardOpen) return;
+  if (token !== accountFocusToken) return;
 
   const scroller = accountEntryScroller();
   const viewport = window.visualViewport;
   if (!scroller || !viewport) return;
 
-  // Always measure the field NOW.
-  // This makes manual scrolling and repeated field switching irrelevant.
   const rect = field.getBoundingClientRect();
-  const targetBottom = viewport.offsetTop + viewport.height - 18;
-  const delta = rect.bottom - targetBottom;
+  const keyboardTop = viewport.offsetTop + viewport.height;
+  const safeBottom = keyboardTop - 18;
+
+  if (rect.bottom <= safeBottom) return;
+
+  const delta = rect.bottom - safeBottom;
 
   const maxScroll = Math.max(
     0,
     scroller.scrollHeight - scroller.clientHeight
   );
 
-  const targetScroll = Math.max(
+  const target = Math.max(
     0,
     Math.min(maxScroll, scroller.scrollTop + delta)
   );
 
-  animateAccountScrollTo(targetScroll, 150);
+  scroller.scrollTop = target;
 }
 
-function scheduleAccountPlacement(delay = 90) {
+function scheduleAccountPlacement(field, token, delay = 140) {
   clearAccountPlacementTimer();
 
   accountPlacementTimer = window.setTimeout(() => {
-    if (!accountPlacementPending) return;
-
     updateAccountKeyboardReserve();
 
-    // Measure after reserve/layout has been updated.
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        accountPlacementPending = false;
-        placeAccountFieldAtTarget();
-      });
+      if (token !== accountFocusToken) return;
+      placeAccountFieldIfHidden(field, token);
     });
   }, delay);
-}
-
-function beginAccountFieldPlacement(field, forcePlacement = null) {
-  if (!(field instanceof HTMLInputElement)) return;
-
-  cancelAccountDismissLock();
-  cancelAccountScrollAnimation();
-  clearAccountPlacementTimer();
-
-  accountFocusActiveField = field;
-
-  const needsPlacement = forcePlacement === null
-    ? accountFieldWillNeedPlacement(field)
-    : Boolean(forcePlacement);
-
-  accountFieldNeedsPlacement = needsPlacement;
-  accountPlacementPending = needsPlacement;
-
-  // Visible even after the keyboard appears: keep the current page position.
-  if (!needsPlacement) {
-    return;
-  }
-
-  // Hidden / predicted to be hidden: place only this field.
-  scheduleAccountPlacement(accountKeyboardOpen ? 35 : 120);
 }
 
 function focusAccountFieldWithoutSafariScroll(event) {
   const field = event.currentTarget;
   if (!(field instanceof HTMLInputElement)) return;
 
-  // Re-tapping the currently focused field should keep normal caret behavior.
   if (document.activeElement === field) return;
 
   const scroller = accountEntryScroller();
   if (!scroller) return;
 
-  accountSwitchTargetField = field;
-  accountFocusScrollTop = scroller.scrollTop;
+  accountFocusToken += 1;
+  const token = accountFocusToken;
 
-  // Decide BEFORE focus whether the field should still be visible after the
-  // keyboard appears. This uses the last measured keyboard height when closed,
-  // or the real visualViewport while the keyboard is already open.
-  const needsPlacement = accountFieldWillNeedPlacement(field);
-  beginAccountFieldPlacement(field, needsPlacement);
+  clearAccountPlacementTimer();
+
+  accountFocusActiveField = field;
+  accountFocusScrollTop = scroller.scrollTop;
 
   if (event.cancelable) event.preventDefault();
   event.stopPropagation();
@@ -3180,7 +3010,6 @@ function focusAccountFieldWithoutSafariScroll(event) {
   const oldTransform = field.style.transform;
   const oldTransition = field.style.transition;
 
-  // Always suppress Safari's own auto-scroll so "visible" fields truly stay put.
   field.style.transition = "none";
   field.style.transform = "translateY(-10000px)";
 
@@ -3191,18 +3020,18 @@ function focusAccountFieldWithoutSafariScroll(event) {
   }
 
   window.setTimeout(() => {
+    if (token !== accountFocusToken) return;
+
     field.style.transform = oldTransform;
     field.style.transition = oldTransition;
 
-    // Return to the user's exact pre-tap scroll position first.
     scroller.scrollTop = accountFocusScrollTop;
 
-    accountSwitchTargetField = null;
-
-    // Only hidden fields get app-controlled placement.
-    if (accountFieldNeedsPlacement) {
-      scheduleAccountPlacement(accountKeyboardOpen ? 30 : 110);
-    }
+    scheduleAccountPlacement(
+      field,
+      token,
+      accountKeyboardOpen ? 40 : 140
+    );
   }, 80);
 }
 
@@ -3222,7 +3051,7 @@ function holdAccountPositionDuringKeyboardDismiss() {
   const scroller = accountEntryScroller();
   if (!scroller) return;
 
-  cancelAccountScrollAnimation();
+  clearAccountPlacementTimer();
 
   accountDismissScrollTop = scroller.scrollTop;
   accountDismissLockUntil = performance.now() + 700;
@@ -3242,37 +3071,6 @@ function holdAccountPositionDuringKeyboardDismiss() {
   });
 }
 
-function handleAccountFieldBlur(field, event) {
-  clearAccountBlurTimer();
-
-  // Do not treat field -> field as keyboard dismissal.
-  // iOS may report relatedTarget unreliably, so wait briefly and inspect
-  // document.activeElement as well.
-  const related = event?.relatedTarget;
-  if (
-    related instanceof HTMLElement &&
-    related.matches?.(".account-entry-field")
-  ) {
-    return;
-  }
-
-  accountBlurTimer = window.setTimeout(() => {
-    const active = document.activeElement;
-
-    if (
-      accountSwitchTargetField ||
-      active?.matches?.(".account-entry-field")
-    ) {
-      return;
-    }
-
-    // Only a genuine "leave all inputs / Done" path gets dismissal locking.
-    if (accountKeyboardOpen) {
-      holdAccountPositionDuringKeyboardDismiss();
-    }
-  }, 35);
-}
-
 function bindAccountEntryFocusBehavior() {
   accountEntryFields().forEach((field) => {
     field.addEventListener(
@@ -3283,21 +3081,29 @@ function bindAccountEntryFocusBehavior() {
 
     field.addEventListener("focus", () => {
       accountFocusActiveField = field;
-      cancelAccountDismissLock();
 
-      // Previous / Next from the iOS accessory bar does not emit touchstart.
-      // Re-evaluate CURRENT geometry: if the new field is already visible,
-      // keep the page exactly where it is; otherwise place it above keyboard.
-      if (accountSwitchTargetField !== field) {
-        beginAccountFieldPlacement(
+      // iOS Previous / Next can focus without touchstart.
+      // Start a fresh one-shot measurement for that field.
+      if (!field.matches(":active")) {
+        accountFocusToken += 1;
+        const token = accountFocusToken;
+        scheduleAccountPlacement(
           field,
-          accountFieldWillNeedPlacement(field)
+          token,
+          accountKeyboardOpen ? 40 : 140
         );
       }
     });
 
-    field.addEventListener("blur", (event) => {
-      handleAccountFieldBlur(field, event);
+    field.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        if (active?.matches?.(".account-entry-field")) return;
+
+        if (accountKeyboardOpen) {
+          holdAccountPositionDuringKeyboardDismiss();
+        }
+      }, 35);
     });
   });
 
@@ -3318,22 +3124,15 @@ function bindAccountEntryFocusBehavior() {
 
     if (accountKeyboardOpen) {
       accountKeyboardHeight = keyboardHeight;
-      saveAccountKeyboardHeight(keyboardHeight);
       updateAccountKeyboardReserve();
 
-      // First-ever opening may not have had a prediction. Once the real
-      // viewport exists, re-check whether this field actually needs moving.
-      if (accountFocusActiveField && accountPlacementPending) {
-        accountFieldNeedsPlacement = accountFieldWillNeedPlacement(
-          accountFocusActiveField
+      if (accountFocusActiveField) {
+        const token = accountFocusToken;
+        scheduleAccountPlacement(
+          accountFocusActiveField,
+          token,
+          110
         );
-
-        if (accountFieldNeedsPlacement) {
-          scheduleAccountPlacement(70);
-        } else {
-          accountPlacementPending = false;
-          clearAccountPlacementTimer();
-        }
       }
     }
 
@@ -3366,16 +3165,12 @@ function openAccountCreateScreen() {
   accountBaseViewportHeight = window.innerHeight;
   accountKeyboardOpen = false;
   accountKeyboardHeight = 0;
-  accountPlacementPending = false;
-  accountFieldNeedsPlacement = true;
   accountFocusScrollTop = 0;
+  accountFocusToken = 0;
   accountDismissLockUntil = 0;
-  accountSwitchTargetField = null;
 
   clearAccountPlacementTimer();
-  clearAccountBlurTimer();
   clearAccountDismissTimers();
-  cancelAccountScrollAnimation();
 
   const modal = $("#accountCreateModal");
   modal.style.setProperty("--account-keyboard-reserve", "0px");
@@ -3388,17 +3183,13 @@ function openAccountCreateScreen() {
 
 function closeAccountCreateScreen() {
   clearAccountPlacementTimer();
-  clearAccountBlurTimer();
   clearAccountDismissTimers();
-  cancelAccountScrollAnimation();
 
-  accountSwitchTargetField = null;
   accountFocusActiveField = null;
   accountBaseViewportHeight = 0;
   accountKeyboardOpen = false;
   accountKeyboardHeight = 0;
-  accountPlacementPending = false;
-  accountFieldNeedsPlacement = true;
+  accountFocusToken = 0;
   accountDismissLockUntil = 0;
 
   const modal = $("#accountCreateModal");

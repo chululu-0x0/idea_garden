@@ -3559,8 +3559,12 @@ body.timeline-active .main,
 }
 
 
+
+
+
 /* =========================================================
-   v6.14 — conditional input placement
-   Visible-after-keyboard fields stay in place.
-   Only fields predicted/confirmed to be covered are repositioned.
+   v6.15 — one-shot keyboard correction
+   Safari focus jump is suppressed.
+   After the keyboard viewport settles, only covered fields move,
+   once, by the minimum required distance.
    ========================================================= */
